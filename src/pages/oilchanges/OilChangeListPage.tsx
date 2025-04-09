@@ -1,10 +1,14 @@
 // src/pages/oilchanges/OilChangeListPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner, Input } from '../../components/ui';
-import { getOilChangesByLubricentro, searchOilChanges } from '../../services/oilChangeService';
-import { OilChange } from '../../types';
+import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner } from '../../components/ui';
+import { getOilChangesByLubricentro, searchOilChanges, getOilChangeById } from '../../services/oilChangeService';
+import { getLubricentroById } from '../../services/lubricentroService';
+import { OilChange, Lubricentro } from '../../types';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import pdfService from '../../services/pdfService';
 
 // Iconos
 import { 
@@ -12,13 +16,33 @@ import {
   MagnifyingGlassIcon, 
   ArrowPathIcon,
   DocumentDuplicateIcon,
-  TrashIcon,
-  PencilIcon
+  PencilIcon,
+  PrinterIcon,
+  ShareIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
+
+// Debounce function for search
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
 
 const OilChangeListPage: React.FC = () => {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
+  const pdfTemplateRef = useRef<HTMLDivElement>(null);
   
   // Estados
   const [loading, setLoading] = useState(true);
@@ -32,6 +56,15 @@ const OilChangeListPage: React.FC = () => {
   const [searchType, setSearchType] = useState<'cliente' | 'dominio'>('dominio');
   const [isSearching, setIsSearching] = useState(false);
   
+  // Estado para el PDF y compartir
+  const [selectedOilChange, setSelectedOilChange] = useState<OilChange | null>(null);
+  const [selectedLubricentro, setSelectedLubricentro] = useState<Lubricentro | null>(null);
+  const [showingPdfPreview, setShowingPdfPreview] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  
+  // Debounced search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  
   // Datos para paginación
   const pageSize = 20;
   
@@ -41,6 +74,15 @@ const OilChangeListPage: React.FC = () => {
       loadInitialData();
     }
   }, [userProfile]);
+  
+  // Efecto para búsqueda instantánea
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      handleSearch();
+    } else if (isSearching) {
+      clearSearch();
+    }
+  }, [debouncedSearchTerm, searchType]);
   
   // Cargar datos iniciales
   const loadInitialData = async () => {
@@ -93,7 +135,7 @@ const OilChangeListPage: React.FC = () => {
   
   // Realizar búsqueda
   const handleSearch = async () => {
-    if (!searchTerm.trim() || !userProfile?.lubricentroId) return;
+    if (!debouncedSearchTerm.trim() || !userProfile?.lubricentroId) return;
     
     try {
       setIsSearching(true);
@@ -103,7 +145,7 @@ const OilChangeListPage: React.FC = () => {
       const results = await searchOilChanges(
         userProfile.lubricentroId,
         searchType,
-        searchTerm.trim(),
+        debouncedSearchTerm.trim(), // Usar el término debounced
         50 // Límite más alto para búsquedas
       );
       
@@ -123,6 +165,122 @@ const OilChangeListPage: React.FC = () => {
     setSearchTerm('');
     setIsSearching(false);
     loadInitialData();
+  };
+  
+  // Generar PDF para un cambio de aceite
+  const generatePDF = async (oilChangeId: string) => {
+    try {
+      setError(null);
+      setGeneratingPdf(true);
+      
+      // Obtener los datos del cambio de aceite
+      const oilChange = await getOilChangeById(oilChangeId);
+      setSelectedOilChange(oilChange);
+      
+      // Obtener datos del lubricentro
+      let lubricentro: Lubricentro | null = null;
+      if (oilChange.lubricentroId) {
+        lubricentro = await getLubricentroById(oilChange.lubricentroId);
+        setSelectedLubricentro(lubricentro);
+      }
+      
+      // Mostrar vista previa
+      setShowingPdfPreview(true);
+      
+      // Esperar a que la vista previa se renderice
+      setTimeout(async () => {
+        if (pdfTemplateRef.current) {
+          try {
+            // Usar la versión con html2canvas
+            const canvas = await html2canvas(pdfTemplateRef.current, {
+              scale: 2, // Mayor escala para mejor calidad
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#FFFFFF'
+            });
+            
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const ratio = canvas.width / canvas.height;
+            const imgWidth = pageWidth;
+            const imgHeight = imgWidth / ratio;
+            
+            pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+            
+            // Si el contenido es más largo que la página, agregar más páginas
+            if (imgHeight > pageHeight) {
+              let remainingHeight = imgHeight;
+              let position = 0;
+              
+              while (remainingHeight > pageHeight) {
+                position -= pageHeight;
+                remainingHeight -= pageHeight;
+                
+                pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+              }
+            }
+            
+            pdf.save(`cambio-aceite-${oilChange.nroCambio}.pdf`);
+          } catch (err) {
+            console.error("Error con html2canvas:", err);
+            
+            // Si falla html2canvas, recurrir a generación directa de PDF
+            if (oilChange && lubricentro !== null) {
+              pdfService.generateDirectPDF(oilChange as OilChange, lubricentro as Lubricentro);
+            } else if (oilChange) {
+              pdfService.generateDirectPDF(oilChange as OilChange, null);
+            }
+          }
+          
+          // Ocultar vista previa
+          setShowingPdfPreview(false);
+          setGeneratingPdf(false);
+        }
+      }, 500);
+      
+    } catch (err) {
+      console.error('Error al preparar el PDF:', err);
+      setError('Error al preparar el PDF. Por favor, intente nuevamente.');
+      setShowingPdfPreview(false);
+      setGeneratingPdf(false);
+      
+      // Intentar con el método de respaldo si falla el principal
+      if (selectedOilChange) {
+        try {
+          pdfService.generateDirectPDF(selectedOilChange, selectedLubricentro);
+        } catch (backupError) {
+          console.error('Error en método de respaldo:', backupError);
+        }
+      }
+    }
+  };
+  
+  // Compartir por WhatsApp
+  const shareViaWhatsApp = async (oilChangeId: string) => {
+    try {
+      // Obtener los datos del cambio de aceite
+      const oilChange = await getOilChangeById(oilChangeId);
+      
+      // Obtener datos del lubricentro
+      let lubricentroName = "Lubricentro";
+      if (oilChange.lubricentroId) {
+        const lubricentro = await getLubricentroById(oilChange.lubricentroId);
+        lubricentroName = lubricentro.fantasyName;
+      }
+      
+      // Usar el servicio para generar el mensaje y URL
+      const { whatsappUrl, whatsappUrlWithPhone } = pdfService.generateWhatsAppMessage(oilChange, lubricentroName);
+      
+      // Abrir en nueva ventana - priorizar URL con teléfono si está disponible
+      window.open(whatsappUrlWithPhone || whatsappUrl, '_blank');
+      
+    } catch (err) {
+      console.error('Error al compartir via WhatsApp:', err);
+      setError('Error al preparar el mensaje para compartir. Por favor, intente nuevamente.');
+    }
   };
   
   // Formatear fecha
@@ -187,7 +345,6 @@ const OilChangeListPage: React.FC = () => {
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                       placeholder={`Buscar por ${searchType === 'dominio' ? 'patente' : 'nombre del cliente'}`}
                       className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                     />
@@ -196,14 +353,6 @@ const OilChangeListPage: React.FC = () => {
               </div>
             </div>
             <div className="flex space-x-2">
-              <Button
-                color="primary"
-                variant="outline"
-                onClick={handleSearch}
-                disabled={!searchTerm.trim()}
-              >
-                Buscar
-              </Button>
               {isSearching && (
                 <Button
                   color="secondary"
@@ -211,6 +360,16 @@ const OilChangeListPage: React.FC = () => {
                   onClick={clearSearch}
                 >
                   Limpiar
+                </Button>
+              )}
+              {!isSearching && debouncedSearchTerm === '' && (
+                <Button
+                  color="primary"
+                  variant="outline"
+                  onClick={loadInitialData}
+                  icon={<ArrowPathIcon className="h-4 w-4" />}
+                >
+                  Actualizar
                 </Button>
               )}
             </div>
@@ -223,21 +382,15 @@ const OilChangeListPage: React.FC = () => {
         <CardHeader
           title={isSearching ? `Resultados de búsqueda para "${searchTerm}"` : "Cambios de Aceite"}
           subtitle={isSearching ? `${oilChanges.length} resultados encontrados` : `Mostrando ${oilChanges.length} registros`}
-          action={
-            !isSearching && (
-              <Button
-                size="sm"
-                variant="outline"
-                color="primary"
-                icon={<ArrowPathIcon className="h-4 w-4" />}
-                onClick={loadInitialData}
-              >
-                Actualizar
-              </Button>
-            )
-          }
         />
         <CardBody>
+          {generatingPdf && (
+            <div className="my-4 text-center">
+              <Spinner size="md" />
+              <p className="mt-2 text-gray-600">Generando PDF, por favor espere...</p>
+            </div>
+          )}
+          
           {oilChanges.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -287,7 +440,7 @@ const OilChangeListPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(change.fechaProximoCambio)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-2">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2 flex">
                         <Button
                           size="sm"
                           color="primary"
@@ -295,7 +448,7 @@ const OilChangeListPage: React.FC = () => {
                           onClick={() => navigate(`/cambios-aceite/${change.id}`)}
                           title="Ver detalle"
                         >
-                          Ver
+                          <EyeIcon className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -314,6 +467,25 @@ const OilChangeListPage: React.FC = () => {
                           title="Duplicar"
                         >
                           <DocumentDuplicateIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="info"
+                          variant="outline"
+                          onClick={() => generatePDF(change.id)}
+                          title="Generar PDF"
+                          disabled={generatingPdf}
+                        >
+                          <PrinterIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="warning"
+                          variant="outline"
+                          onClick={() => shareViaWhatsApp(change.id)}
+                          title="Compartir"
+                        >
+                          <ShareIcon className="h-4 w-4" />
                         </Button>
                       </td>
                     </tr>
@@ -361,8 +533,152 @@ const OilChangeListPage: React.FC = () => {
           )}
         </CardBody>
       </Card>
+      
+      {/* Componente oculto para generar PDF */}
+      {showingPdfPreview && selectedOilChange && (
+        <div className="hidden">
+          <div ref={pdfTemplateRef} className="p-8 bg-white" style={{ width: '793px', height: '1122px' }}>
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              {selectedLubricentro && (
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold">{selectedLubricentro.fantasyName}</h1>
+                  <p className="text-gray-600">{selectedLubricentro.domicilio}</p>
+                  <p className="text-gray-600">CUIT: {selectedLubricentro.cuit} - Tel: {selectedLubricentro.phone}</p>
+                  <p className="text-gray-600">{selectedLubricentro.email}</p>
+                </div>
+              )}
+              
+              <div className="text-center">
+                <h2 className="text-xl font-semibold">COMPROBANTE DE CAMBIO DE ACEITE</h2>
+                <p className="text-lg font-bold mt-1">Nº {selectedOilChange.nroCambio}</p>
+                <p className="text-gray-600 mt-1">Fecha: {formatDate(selectedOilChange.fecha)}</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Cliente</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p><span className="font-semibold">Nombre:</span> {selectedOilChange.nombreCliente}</p>
+                  {selectedOilChange.celular && <p><span className="font-semibold">Teléfono:</span> {selectedOilChange.celular}</p>}
+                </div>
+                <div>
+                  <p><span className="font-semibold">Operador:</span> {selectedOilChange.nombreOperario}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Vehículo</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p><span className="font-semibold">Dominio:</span> {selectedOilChange.dominioVehiculo}</p>
+                  <p><span className="font-semibold">Marca:</span> {selectedOilChange.marcaVehiculo}</p>
+                  <p><span className="font-semibold">Modelo:</span> {selectedOilChange.modeloVehiculo}</p>
+                </div>
+                <div>
+                  <p><span className="font-semibold">Tipo:</span> {selectedOilChange.tipoVehiculo}</p>
+                  {selectedOilChange.añoVehiculo && <p><span className="font-semibold">Año:</span> {selectedOilChange.añoVehiculo}</p>}
+                  <p><span className="font-semibold">Kilometraje Actual:</span> {selectedOilChange.kmActuales.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Servicio</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p><span className="font-semibold">Aceite:</span> {selectedOilChange.marcaAceite} {selectedOilChange.tipoAceite} {selectedOilChange.sae}</p>
+                  <p><span className="font-semibold">Cantidad:</span> {selectedOilChange.cantidadAceite} Litros</p>
+                </div>
+                <div>
+                  <p><span className="font-semibold">Próximo Cambio Km:</span> {selectedOilChange.kmProximo.toLocaleString()}</p>
+                  <p><span className="font-semibold">Próximo Cambio Fecha:</span> {formatDate(selectedOilChange.fechaProximoCambio)}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Filtros y Servicios Adicionales</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  {selectedOilChange.filtroAceite && (
+                    <p>
+                      <span className="font-semibold">Filtro de Aceite:</span> Sí
+                      {selectedOilChange.filtroAceiteNota && ` (${selectedOilChange.filtroAceiteNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.filtroAire && (
+                    <p>
+                      <span className="font-semibold">Filtro de Aire:</span> Sí
+                      {selectedOilChange.filtroAireNota && ` (${selectedOilChange.filtroAireNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.filtroHabitaculo && (
+                    <p>
+                      <span className="font-semibold">Filtro de Habitáculo:</span> Sí
+                      {selectedOilChange.filtroHabitaculoNota && ` (${selectedOilChange.filtroHabitaculoNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.filtroCombustible && (
+                    <p>
+                      <span className="font-semibold">Filtro de Combustible:</span> Sí
+                      {selectedOilChange.filtroCombustibleNota && ` (${selectedOilChange.filtroCombustibleNota})`}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  {selectedOilChange.aditivo && (
+                    <p>
+                      <span className="font-semibold">Aditivo:</span> Sí
+                      {selectedOilChange.aditivoNota && ` (${selectedOilChange.aditivoNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.refrigerante && (
+                    <p>
+                      <span className="font-semibold">Refrigerante:</span> Sí
+                      {selectedOilChange.refrigeranteNota && ` (${selectedOilChange.refrigeranteNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.diferencial && (
+                    <p>
+                      <span className="font-semibold">Diferencial:</span> Sí
+                      {selectedOilChange.diferencialNota && ` (${selectedOilChange.diferencialNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.caja && (
+                    <p>
+                      <span className="font-semibold">Caja:</span> Sí
+                      {selectedOilChange.cajaNota && ` (${selectedOilChange.cajaNota})`}
+                    </p>
+                  )}
+                  {selectedOilChange.engrase && (
+                    <p>
+                      <span className="font-semibold">Engrase:</span> Sí
+                      {selectedOilChange.engraseNota && ` (${selectedOilChange.engraseNota})`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {selectedOilChange.observaciones && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Observaciones</h3>
+                <p className="whitespace-pre-line">{selectedOilChange.observaciones}</p>
+              </div>
+            )}
+            
+            <div className="mt-10 border-t border-gray-200 pt-6 text-center">
+              <p className="text-sm text-gray-500">Este documento no es válido como factura.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Próximo cambio: a los {selectedOilChange.kmProximo.toLocaleString()} km o el {formatDate(selectedOilChange.fechaProximoCambio)}, lo que ocurra primero.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </PageContainer>
   );
 };
-
 export default OilChangeListPage;

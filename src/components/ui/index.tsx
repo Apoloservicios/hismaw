@@ -1,5 +1,8 @@
 // src/components/ui/index.tsx
 import React, { ReactNode } from 'react';
+import { Tabs, Tab } from './Tabs';
+
+
 
 // Panel de contenido básico
 interface CardProps {
@@ -483,6 +486,9 @@ interface InputProps {
   disabled?: boolean;
   className?: string;
   helperText?: string;
+  icon?: React.ReactNode; 
+  maxLength? :string | number;
+  minLength? :string | number;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -690,3 +696,5 @@ export const Textarea: React.FC<TextareaProps> = ({
     </div>
   );
 };
+
+export { Tabs, Tab };

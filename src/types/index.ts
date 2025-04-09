@@ -16,6 +16,7 @@ export interface User {
   createdAt: Date;
   photoURL?: string;
   updatedAt?: Date;
+ 
 }
 
 // Tipos de Lubricentro

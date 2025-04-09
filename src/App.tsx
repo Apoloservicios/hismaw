@@ -35,6 +35,8 @@ import UserProfilePage from './pages/users/UserProfilePage';
 
 // Pages - Reports
 import ReportsPage from './pages/reports/ReportsPage';
+import OperatorReportPage from './pages/reports/OperatorReportPage';
+import VehicleReportPage from './pages/reports/VehicleReportPage';
 import UpcomingServicesPage from './pages/services/UpcomingServicesPage';
 import SupportPage from './pages/support/SupportPage';
 
@@ -149,6 +151,25 @@ const App: React.FC = () => {
                 element={
                   <PrivateRoute requiredRoles={['admin', 'superadmin']}>
                     <ReportsPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              {/* Nuevas rutas para reportes detallados */}
+              <Route 
+                path="/reportes/operador/:id" 
+                element={
+                  <PrivateRoute requiredRoles={['admin', 'superadmin']}>
+                    <OperatorReportPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              <Route 
+                path="/reportes/vehiculo/:dominio" 
+                element={
+                  <PrivateRoute requiredRoles={['admin', 'superadmin']}>
+                    <VehicleReportPage />
                   </PrivateRoute>
                 } 
               />

@@ -6,6 +6,8 @@ import { getLubricentroById, updateLubricentro } from '../../services/lubricentr
 import { updateUser } from '../../services/userService';
 import ImageUploader from '../../components/common/ImageUploader';
 import { Lubricentro, User } from '../../types';
+import LogoUploader from '../../components/common/LogoUploader';
+
 
 const UserProfilePage: React.FC = () => {
   const { userProfile, updateUserProfile } = useAuth();
@@ -17,6 +19,7 @@ const UserProfilePage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [lubricentro, setLubricentro] = useState<Lubricentro | null>(null);
   const [activeTab, setActiveTab] = useState('personal');
+  const [updatingLogo, setUpdatingLogo] = useState(false);
   
   // Datos del formulario de usuario
   const [formData, setFormData] = useState({
@@ -33,8 +36,20 @@ const UserProfilePage: React.FC = () => {
     phone: '',
     email: '',
     cuit: '',
-    responsable: ''
+    responsable: '',
+    logoUrl: ''
   });
+
+  useEffect(() => {
+    if (lubricentro) {
+      console.log("Logo URL:", lubricentro.logoUrl);
+      console.log("Logo Base64 disponible:", !!lubricentro.logoBase64);
+      if (lubricentro.logoBase64) {
+        console.log("Base64 longitud:", lubricentro.logoBase64.length);
+        console.log("Base64 primeros 100 caracteres:", lubricentro.logoBase64.substring(0, 100));
+      }
+    }
+  }, [lubricentro]);
   
   // Cargar datos iniciales
   useEffect(() => {
@@ -68,7 +83,8 @@ const UserProfilePage: React.FC = () => {
             phone: lubricentroData.phone || '',
             email: lubricentroData.email || '',
             cuit: lubricentroData.cuit || '',
-            responsable: lubricentroData.responsable || ''
+            responsable: lubricentroData.responsable || '',
+            logoUrl: lubricentroData.logoUrl || ''
           });
         }
       } catch (err) {
@@ -96,9 +112,36 @@ const UserProfilePage: React.FC = () => {
     setLubricentroFormData(prev => ({ ...prev, [name]: value }));
   };
   
-  // Manejar subida exitosa de imagen
+  // Manejar subida exitosa de imagen para el perfil de usuario
   const handleImageUploaded = (imageUrl: string) => {
     setFormData(prev => ({ ...prev, photoURL: imageUrl }));
+  };
+  
+  // Manejar subida exitosa de logo del lubricentro
+  const handleLogoUploaded = async (imageUrl: string) => {
+    if (!userProfile?.lubricentroId || !lubricentro) {
+      setError('No se encontró información del lubricentro');
+      return;
+    }
+    
+    try {
+      setUpdatingLogo(true);
+      setError(null);
+      
+      // Actualizar solo la URL del logo
+      await updateLubricentro(userProfile.lubricentroId, { logoUrl: imageUrl });
+      
+      // Actualizar el estado local
+      setLubricentro(prev => prev ? { ...prev, logoUrl: imageUrl } : null);
+      setLubricentroFormData(prev => ({ ...prev, logoUrl: imageUrl }));
+      
+      setSuccess('Logo del lubricentro actualizado correctamente');
+    } catch (err) {
+      console.error('Error al actualizar el logo:', err);
+      setError('Error al actualizar el logo del lubricentro');
+    } finally {
+      setUpdatingLogo(false);
+    }
   };
   
   // Guardar cambios del perfil de usuario
@@ -157,7 +200,8 @@ const UserProfilePage: React.FC = () => {
         domicilio: lubricentroFormData.domicilio,
         phone: lubricentroFormData.phone,
         email: lubricentroFormData.email,
-        responsable: lubricentroFormData.responsable
+        responsable: lubricentroFormData.responsable,
+        logoUrl: lubricentroFormData.logoUrl
       };
       
       // No permitir cambiar el CUIT si no es superadmin
@@ -229,7 +273,16 @@ const UserProfilePage: React.FC = () => {
               <CardBody>
                 <ImageUploader 
                   currentImageUrl={formData.photoURL}
-                  onImageUploaded={handleImageUploaded}
+                  onImageUploaded={(imageData) => {
+                    // Si imageData es un string (versión antigua)
+                    if (typeof imageData === 'string') {
+                      setFormData(prev => ({ ...prev, photoURL: imageData }));
+                    } 
+                    // Si imageData es un objeto (nueva versión)
+                    else {
+                      setFormData(prev => ({ ...prev, photoURL: (imageData as { url: string }).url }));
+                    }
+                  }}
                   className="py-4"
                 />
               </CardBody>
@@ -350,86 +403,76 @@ const UserProfilePage: React.FC = () => {
       
       {/* Perfil de lubricentro */}
       {activeTab === 'lubricentro' && lubricentro && (
-        <Card>
-          <CardHeader
-            title="Información del Lubricentro"
-            subtitle="Actualiza los datos de tu lubricentro"
-          />
-          <CardBody>
-            <form onSubmit={handleSubmitLubricentro} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <Input
-                  label="Nombre de Fantasía"
-                  name="fantasyName"
-                  value={lubricentroFormData.fantasyName}
-                  onChange={handleLubricentroChange}
-                  required
-                />
-                
-                <Input
-                  label="Responsable"
-                  name="responsable"
-                  value={lubricentroFormData.responsable}
-                  onChange={handleLubricentroChange}
-                  required
-                />
+        <Card className="mb-6">
+        <CardHeader 
+          title="Logo del Lubricentro" 
+          subtitle="Este logo aparecerá en los PDFs y documentos generados"
+        />
+        <CardBody>
+          <div className="flex flex-col items-center md:flex-row md:space-x-8">
+            <div className="w-full md:w-1/2 mb-4 md:mb-0">
+            <LogoUploader 
+              currentLogoUrl={lubricentro?.logoUrl}
+              onLogoUploaded={(logoData: { url: string, base64: string }) => {
+                // Actualizar el logo del lubricentro
+                if (userProfile?.lubricentroId) {
+                  setUpdatingLogo(true);
+                  
+                  // Guardar la URL y base64 en el estado
+                  setLubricentro(prev => prev ? { 
+                    ...prev, 
+                    logoUrl: logoData.url,
+                    logoBase64: logoData.base64
+                  } : null);
+                  
+                  // También actualizamos los datos en Firestore
+                  updateLubricentro(userProfile.lubricentroId, { 
+                    logoUrl: logoData.url,
+                    logoBase64: logoData.base64
+                  })
+                    .then(() => {
+                      setSuccess('Logo del lubricentro actualizado correctamente');
+                      setUpdatingLogo(false);
+                    })
+                    .catch((err) => {
+                      console.error('Error al actualizar el logo:', err);
+                      setError('Error al actualizar el logo del lubricentro');
+                      setUpdatingLogo(false);
+                    });
+                }
+              }}
+              className="py-4"
+            />
+              {updatingLogo && (
+                <div className="mt-2 text-center">
+                  <Spinner size="sm" color="primary" />
+                  <p className="text-sm text-gray-500 mt-1">Actualizando logo...</p>
+                </div>
+              )}
+            </div>
+            <div className="w-full md:w-1/2">
+              <div className="bg-gray-50 p-4 rounded-md">
+                <h4 className="text-sm font-medium text-gray-900 mb-2">¿Por qué es importante el logo?</h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  El logo de tu lubricentro aparecerá en todos los documentos generados por el sistema,
+                  incluyendo los comprobantes de cambio de aceite, reportes y mensajes compartidos.
+                </p>
+                <p className="text-sm text-gray-600">
+                  Recomendaciones:
+                </p>
+                <ul className="text-sm text-gray-600 list-disc list-inside mb-3">
+                  <li>Utiliza una imagen con fondo transparente (PNG)</li>
+                  <li>Tamaño recomendado: 500x200 píxeles</li>
+                  <li>Mantén un tamaño de archivo menor a 2MB</li>
+                </ul>
+                <p className="text-sm text-gray-600">
+                  Una vez subido, el logo se mostrará automáticamente en todos los PDFs generados.
+                </p>
               </div>
-              
-              <Input
-                label="Domicilio"
-                name="domicilio"
-                value={lubricentroFormData.domicilio}
-                onChange={handleLubricentroChange}
-                required
-              />
-              
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <Input
-                  label="Teléfono"
-                  name="phone"
-                  value={lubricentroFormData.phone}
-                  onChange={handleLubricentroChange}
-                  required
-                />
-                
-                <Input
-                  label="Email"
-                  name="email"
-                  type="email"
-                  value={lubricentroFormData.email}
-                  onChange={handleLubricentroChange}
-                  required
-                />
-              </div>
-              
-              <Input
-                label="CUIT"
-                name="cuit"
-                value={lubricentroFormData.cuit}
-                onChange={handleLubricentroChange}
-                disabled={userProfile?.role !== 'superadmin'}
-                helperText={userProfile?.role !== 'superadmin' ? "Solo el Super Administrador puede cambiar el CUIT" : ""}
-              />
-              
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  color="primary"
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <>
-                      <Spinner size="sm" color="white" className="mr-2" />
-                      Guardando...
-                    </>
-                  ) : (
-                    'Actualizar Lubricentro'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </CardBody>
-        </Card>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
       )}
     </PageContainer>
   );

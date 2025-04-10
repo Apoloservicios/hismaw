@@ -10,6 +10,7 @@ import { OilChange, Lubricentro } from '../../types';
 import EnhancedPrintComponent from '../../components/print/EnhancedPrintComponent';
 import { enhancedPdfService } from '../../services/enhancedPdfService';
 
+
 // Iconos
 import { 
   PrinterIcon, 
@@ -20,6 +21,8 @@ import {
   ChevronLeftIcon,
   DocumentDuplicateIcon
 } from '@heroicons/react/24/outline';
+
+
 
 const OilChangeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -71,32 +74,33 @@ const OilChangeDetailPage: React.FC = () => {
     }
   };
   
-  // Manejar la impresión
   const handlePrint = useReactToPrint({
-    
     documentTitle: `Cambio de Aceite - ${oilChange?.nroCambio}`,
     onAfterPrint: () => {
       console.log('Impresión completada');
     },
-    content: () => printRef.current
-    
+    content: () => printRef.current,
+    // Opciones adicionales para mejorar el manejo de imágenes
+    onBeforeGetContent: async () => {
+      // Este hook se ejecuta antes de capturar el contenido
+      // Podemos usar un timeout para asegurar que las imágenes estén cargadas
+      console.log("Preparando impresión...");
+      return new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
+    }
   });
   
-  // Generar PDF con diseño mejorado
-  const handleGeneratePDF = async () => {
-    if (!oilChange || !printRef.current) return;
+  const handleGeneratePDF = () => {
+    if (!oilChange) return;
     
     try {
-      const filename = `cambio-aceite-${oilChange.nroCambio}.pdf`;
-      await enhancedPdfService.generatePDF(printRef.current, filename);
+      // Usar el método directo que no depende de html2canvas
+      enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
+      console.log("PDF generado exitosamente con el método directo");
     } catch (err) {
       console.error('Error al generar PDF:', err);
       setError('Error al generar el PDF. Por favor, intente nuevamente.');
-      
-      // Método de respaldo si falla el principal
-      if (oilChange) {
-        enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
-      }
     }
   };
   

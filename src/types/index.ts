@@ -35,7 +35,8 @@ export interface Lubricentro {
     lng?: number;
     address?: string;
   };
-  logoUrl?: string;
+  logoUrl?: string;      // URL de la imagen en Cloudinary
+  logoBase64?: string;   // Versión base64 del logo para PDFs
   ownerId: string;
   estado: LubricentroStatus;
   subscriptionId?: string;
@@ -44,6 +45,11 @@ export interface Lubricentro {
   trialEndDate?: Date;
   updatedAt?: Date;
 }
+
+
+
+
+
 
 // Tipo de suscripción
 export type SubscriptionPlan = 'trial' | 'basic' | 'premium';

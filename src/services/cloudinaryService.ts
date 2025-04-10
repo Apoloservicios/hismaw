@@ -6,16 +6,91 @@ const CLOUDINARY_CLOUD_NAME = 'dcf4bewcl';     // El nombre que proporcionaste
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 /**
+ * Convierte un archivo a base64
+ * @param file Archivo a convertir
+ * @returns Promise con el string base64
+ */
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+/**
+ * Optimiza una imagen en base64 reduciendo su tamaño
+ * @param base64 String base64 de la imagen
+ * @param maxWidth Ancho máximo
+ * @param maxHeight Alto máximo
+ * @returns Promise con el string base64 optimizado
+ */
+const optimizeBase64Image = (base64: string, maxWidth = 300, maxHeight = 150): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.src = base64;
+      
+      img.onload = () => {
+        // Calcular nuevas dimensiones manteniendo la proporción
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
+        
+        // Crear un canvas para redimensionar
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Dibujar la imagen redimensionada
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Obtener el base64 optimizado con menor calidad para JPEG
+          const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(optimizedBase64);
+        } else {
+          reject(new Error('No se pudo obtener el contexto 2D del canvas'));
+        }
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Error al cargar la imagen para optimización'));
+      };
+    } catch (e) {
+      reject(e);
+    }
+  });
+};
+
+/**
  * Servicio para interactuar con Cloudinary
  */
-export const cloudinaryService = {
+const cloudinaryService = {
   /**
-   * Sube una imagen a Cloudinary
+   * Sube una imagen a Cloudinary y devuelve tanto la URL como la representación en base64
    * @param file - Archivo de imagen a subir
-   * @returns Promise con la URL de la imagen subida
+   * @returns Promise con la URL y el base64 de la imagen subida
    */
-  uploadImage: async (file: File): Promise<string> => {
+  uploadImage: async (file: File): Promise<{ url: string, base64: string }> => {
     try {
+      // Convertir primero el archivo a base64 para uso local
+      const rawBase64 = await fileToBase64(file);
+      
+      // Optimizar el base64 para almacenamiento
+      const optimizedBase64 = await optimizeBase64Image(rawBase64);
+      
       // Crear FormData para enviar el archivo
       const formData = new FormData();
       formData.append('file', file);
@@ -28,9 +103,12 @@ export const cloudinaryService = {
         }
       });
       
-      // Verificar respuesta y retornar la URL de la imagen
+      // Verificar respuesta y retornar la URL y base64 de la imagen
       if (response.data && response.data.secure_url) {
-        return response.data.secure_url;
+        return {
+          url: response.data.secure_url,
+          base64: optimizedBase64
+        };
       } else {
         throw new Error('No se recibió una URL válida de Cloudinary');
       }

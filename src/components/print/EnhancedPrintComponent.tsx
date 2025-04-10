@@ -60,38 +60,59 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
           </div>
           
           <div style={{ textAlign: 'right' }}>
-            {/* Logo y código QR */}
-            {lubricentro && lubricentro.logoUrl ? (
-              <img 
-                src={lubricentro.logoUrl} 
-                alt={lubricentro.fantasyName} 
-                style={{ maxHeight: '80px', maxWidth: '150px' }}
-              />
-            ) : (
-              <div style={{ 
-                height: '80px', 
-                width: '150px', 
-                backgroundColor: lightBgColor,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '4px',
-                color: primaryColor,
-                fontWeight: 'bold'
-              }}>
-                LUBRICENTRO
-              </div>
-            )}
-            
-            {/* Placeholder para QR (en una implementación real se generaría dinámicamente) */}
-            <div style={{
-              width: '70px',
-              height: '70px',
-              marginTop: '10px',
-              backgroundColor: '#eee',
-              marginLeft: 'auto'
-            }}></div>
-          </div>
+              {/* Logo del lubricentro - Usando preferentemente logoBase64 para impresión */}
+              {lubricentro?.logoBase64 ? (
+                <img 
+                  src={lubricentro.logoBase64} 
+                  alt={lubricentro.fantasyName || 'Logo lubricentro'} 
+                  style={{ 
+                    maxHeight: '80px', 
+                    maxWidth: '150px',
+                    objectFit: 'contain',
+                    display: 'block',
+                    marginLeft: 'auto' // Alinea a la derecha
+                  }}
+                />
+              ) : lubricentro?.logoUrl ? (
+                <img 
+                  src={lubricentro.logoUrl} 
+                  alt={lubricentro.fantasyName || 'Logo lubricentro'} 
+                  style={{ 
+                    maxHeight: '80px', 
+                    maxWidth: '150px',
+                    objectFit: 'contain',
+                    display: 'block',
+                    marginLeft: 'auto' // Alinea a la derecha
+                  }}
+                  crossOrigin="anonymous" // Importante para solucionar problemas de CORS
+                />
+              ) : (
+                <div style={{ 
+                  height: '80px', 
+                  width: '150px', 
+                  backgroundColor: lightBgColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  color: primaryColor,
+                  fontWeight: 'bold',
+                  fontSize: '20px',
+                  marginLeft: 'auto' // Alinea a la derecha
+                }}>
+                  {lubricentro?.fantasyName?.substring(0, 2).toUpperCase() || 'LB'}
+                </div>
+              )}
+              
+              {/* Placeholder para QR (en una implementación real se generaría dinámicamente) */}
+              <div style={{
+                width: '70px',
+                height: '70px',
+                marginTop: '10px',
+                backgroundColor: '#eee',
+                marginLeft: 'auto'
+              }}></div>
+            </div>
         </div>
         
         {/* Cabecera del comprobante */}

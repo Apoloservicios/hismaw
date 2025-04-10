@@ -2,9 +2,93 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { OilChange, Lubricentro } from '../types';
-// Nota: En una implementación real, necesitarías instalar estas dependencias
-// import QRCode from 'qrcode-generator';
-// import { saveAs } from 'file-saver';
+
+// Logo predeterminado en base64 (un simple logo genérico)
+const defaultLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4wEFBisYW4LrGwAAA9tJREFUeNrt3U9IVFEUx/HvGzVNRfwDpRZZ2SLSQoJolWVEm6y/tHARQZtolWULaVEbdREYLXPRHyjbSJsiFxH9wQiMMrLFgJlZUYtpXLeF5Ixv5r1535s/d+Y9zwcG4XLHd849575774wHIiIiIiIiIiIiIiIiIlIUdUAnMAKMA9+BFDADpIGfwCQwDAwA14HdgK92WVWB9BQQgU1rgTtA1YID6XA4nDZgNAcglq93wINygPENjs42bVkAERGRUgujPMbSCBwH9gC1QBXwCxgDngH9wOfQOueHH3V11K9YQcXixRQl/wW/5PGZpxz+P7+Bc8CzvEYF8NyKAWAAOAt4QDtwN49ebtOHnMboLLwfBV+heobfNbF9xhCwwtOA9OTxgZc8DVaeoXnU5wfv6zDww4MQ8jJPojVuP9RVQM+IxqS+v8DDEBJGrGZWbAe6C7TGDQM1Hobw1JGkBTiRh3WuHejIMj99JFkTcbA3eRWwFbgfwxo3CJx2/I59gG8zQBdwLPj8SXuHBccDOoN9xw1bXtgYkAlP9DzwBJgKJt7pYJcq22QxiNnfpCJa54DXOXz2jxhHxzGbOUUkXuX4fTMOQZxXOPnZb1M4bjPzHIJoVDj52Qsctt8pCMdF9UrEHPLMlheuQGx0CKLLcY3qtVnCUccgHgfnEXH13PJ35sJkEu/DRLzaphnYTf3GZo4tMPcTAz/B58i6Io5o1QJ7g+3YDXaPT38M6xtW77B62czhVk09hptdqRwOFuO+dnqLbSMzX/E04LHl0fPBPshvW57a3KizHnN9pI/SuCbfXcJxxIDNhTozPwJ8KaHTyoklODqgSDcyQyk9jHAUOJZXQhAyHIyOVxZf/ztwkpnTMSd9xhLMkx9+iRyRXo1JZqbUFcvFwKVyeegsxvOi8OZn/y0VBhGRwkd5jKURaAH2YR591mL+Yl4K+IA5fX6GedRmXiOj3L+Sqi3YLIbHxY/FvJPkcAHXuE9Al7ZfREQkPwdxdlx4FXP9eQrzsNwHx7VpHNsOkiGP7Ss7vGCh8YJU2vbXbdhXdnh8eTqXBsIvPRyLwWYTCO+K+GG4a4tMZl5rI4Aw3PXMQZCZl3JERCR2QE4CExFUGbfeaLG3BDaNYb7c7YZNr0GYd4cAbQqkTYGIiIj+6CrWyMv1yF6kU6hDyMqIPq8ioj0k02HkKObVqOkCb7+mMc9XjAbvDonFHuK6hzhmTgF4WdpnWcN8ey6TJ0HMKYBeQPcQERERERERERERERERERERl/wBsSpUZnbkoYYAAAAASUVORK5CYII=';
+
+// Función auxiliar para añadir un logo al PDF
+const addLogoToDocument = (
+      pdf: any, 
+      logoBase64: string,
+      fallbackLogo: string | null
+    ): Promise<boolean> => {
+      return new Promise((resolve) => {
+    try {
+      // Crear un elemento de imagen HTML
+      const img = new Image();
+      
+      // Establecer el origen con el base64
+      img.src = logoBase64.startsWith('data:') ? logoBase64 : `data:image/png;base64,${logoBase64}`;
+      
+      // Cuando la imagen se cargue, añadirla al PDF
+      img.onload = () => {
+        try {
+          // Crear un canvas temporal para procesar la imagen
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          // Dibujar la imagen en el canvas
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            
+            // Obtener una representación JPEG de la imagen desde el canvas
+            const jpegData = canvas.toDataURL('image/jpeg');
+            
+            // Añadir la imagen al PDF      x    y
+            pdf.addImage(jpegData, 'JPEG', 15, 30, 40, 25);
+            console.log('Logo añadido correctamente');
+            resolve(true);
+          } else {
+            throw new Error('No se pudo obtener el contexto 2D del canvas');
+          }
+        } catch (renderError) {
+          console.error('Error al renderizar logo en canvas:', renderError);
+          // Intentar con el logo de respaldo
+          if (fallbackLogo) {
+            try {
+              pdf.addImage(fallbackLogo, 'PNG', 0, 30, 50, 25);
+              console.log('Logo de respaldo añadido');
+              resolve(true);
+            } catch (e) {
+              console.error('Error al añadir logo de respaldo:', e);
+              resolve(false);
+            }
+          } else {
+            resolve(false);
+          }
+        }
+      };
+      
+      // Si hay error, usar el logo de respaldo
+      img.onerror = () => {
+        console.error('Error al cargar la imagen desde base64');
+        if (fallbackLogo) {
+          try {
+            pdf.addImage(fallbackLogo, 'PNG', 0, 30, 50, 25);
+            console.log('Logo de respaldo añadido después de error de carga');
+            resolve(true);
+          } catch (e) {
+            console.error('Error al añadir logo de respaldo:', e);
+            resolve(false);
+          }
+        } else {
+          resolve(false);
+        }
+      };
+      
+      // Por si acaso la imagen nunca se carga, establecer un tiempo de espera
+      setTimeout(() => {
+        resolve(false);
+      }, 3000);
+      
+    } catch (e) {
+      console.error('Error en el proceso de añadir logo:', e);
+      resolve(false);
+    }
+  });
+};
 
 /**
  * Servicio mejorado para la generación de PDF y utilidades relacionadas
@@ -120,6 +204,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       alert('Error al exportar a Excel. Por favor, intente nuevamente.');
     }
   },
+  
   /**
    * Genera un PDF a partir de un nodo HTML y lo descarga
    * Usando html2canvas para una mejor compatibilidad
@@ -133,26 +218,24 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     }
     
     try {
+      // Esperar un momento para que todas las imágenes se carguen
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Generar canvas del HTML con configuración optimizada
       const canvas = await html2canvas(node, {
         scale: 2, // Mayor escala para mejor calidad
         useCORS: true, // Para permitir imágenes externas
+        allowTaint: true, // Permitir imágenes de otros dominios
+        foreignObjectRendering: false, // Más compatible
         logging: false, // Reducir logs de consola
-        backgroundColor: '#FFFFFF', // Fondo blanco
-        onclone: (document, element) => {
-          // Si hay estilos específicos que quieras aplicar al clonar el elemento
-          // Por ejemplo, para asegurar que todo el contenido sea visible
-          element.style.height = 'auto';
-          element.style.overflow = 'visible';
-          return element;
-        }
+        backgroundColor: '#FFFFFF' // Fondo blanco
       });
       
       // Crear PDF con tamaño A4
       const pdf = new jsPDF('p', 'mm', 'a4');
       
       // Obtener dimensiones
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       
@@ -227,7 +310,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
    * @param lubricentro - Datos del lubricentro
    * @returns nombre del archivo generado
    */
-  generateDirectPDF: (oilChange: OilChange, lubricentro: Lubricentro | null): string => {
+  generateDirectPDF: async (oilChange: OilChange, lubricentro: Lubricentro | null): Promise<string> => {
     const pdf = new jsPDF();
     const filename = `cambio-aceite-${oilChange.nroCambio}.pdf`;
     
@@ -249,15 +332,13 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.setFontSize(18);
     pdf.setTextColor(40, 40, 40);
     
-    // Agregar logo si existe
-    if (lubricentro && lubricentro.logoUrl) {
-      try {
-        // En una implementación real, deberías manejar la carga del logo
-        // Aquí solo mostramos cómo se podría hacer
-        // pdf.addImage(lubricentro.logoUrl, 'JPEG', 150, 15, 40, 30);
-      } catch (e) {
-        console.error('Error al cargar el logo:', e);
-      }
+    // Intentar añadir el logo
+    if (lubricentro?.logoBase64) {
+      await addLogoToDocument(pdf, lubricentro.logoBase64, defaultLogoBase64);
+    } else if (lubricentro?.logoUrl) {
+      await addLogoToDocument(pdf, lubricentro.logoUrl, defaultLogoBase64);
+    } else {
+      await addLogoToDocument(pdf, defaultLogoBase64, null);
     }
     
     // Cabecera con colores
@@ -268,22 +349,22 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     
     // Información del lubricentro
     pdf.setFontSize(12);
-    pdf.setTextColor(40, 40, 40);
+    pdf.setTextColor(50, 40, 40);
     if (lubricentro) {
-      pdf.text(lubricentro.fantasyName, 20, 35);
+      pdf.text(lubricentro.fantasyName, 70, 35);
       pdf.setFontSize(10);
-      pdf.text(lubricentro.domicilio, 20, 42);
-      pdf.text(`CUIT: ${lubricentro.cuit} - Tel: ${lubricentro.phone}`, 20, 48);
+      pdf.text(lubricentro.domicilio, 70, 42);
+      pdf.text(`CUIT: ${lubricentro.cuit} - Tel: ${lubricentro.phone}`, 70, 48);
     }
     
     // Destacar número de comprobante
     pdf.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
-    pdf.rect(130, 30, 70, 20, 'F');
+    pdf.rect(150, 30, 45, 20, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(14);
-    pdf.text(`Nº ${oilChange.nroCambio}`, 165, 40, { align: 'center' });
+    pdf.text(`Nº ${oilChange.nroCambio}`, 172, 40, { align: 'center' });
     pdf.setFontSize(11);
-    pdf.text(`Fecha: ${formatDate(oilChange.fecha)}`, 165, 47, { align: 'center' });
+    pdf.text(`Fecha: ${formatDate(oilChange.fecha)}`, 172, 47, { align: 'center' });
     
     // Dominio del vehículo en grande
     pdf.setFillColor(240, 240, 240);
@@ -308,6 +389,12 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     
     // Datos del vehículo
     let yPos = 110;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Dominio:', 15, yPos);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(oilChange.dominioVehiculo, 50, yPos);
+
+    yPos += 8;
     pdf.setFont('helvetica', 'normal');
     pdf.text('Marca:', 15, yPos);
     pdf.setFont('helvetica', 'bold');
@@ -337,7 +424,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.setFont('helvetica', 'bold');
     pdf.text(`${oilChange.kmActuales.toLocaleString()} km`, 50, yPos);
     
-    // Sección de Alertas (servicios)
+    // Sección de datos del servicio
     pdf.setFillColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
     pdf.rect(110, 90, 90, 10, 'F');
     pdf.setTextColor(255, 255, 255);
@@ -383,6 +470,12 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.setFont('helvetica', 'bold');
     pdf.text(formatDate(oilChange.fechaProximoCambio), 145, yPos);
     
+    yPos += 8;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Próx. Km:', 115, yPos);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`${oilChange.kmProximo.toLocaleString()} km`, 145, yPos);
+    
     // Servicios adicionales
     pdf.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
     pdf.rect(10, 170, 190, 10, 'F');
@@ -416,38 +509,38 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     };
     
     // Filtros - primera columna
-    drawCheckCircle(xPosCol1, yPos-2, oilChange.filtroAceite);
+    drawCheckCircle(xPosCol1, yPos-2, !!oilChange.filtroAceite);
     pdf.text('Filtro de Aceite', xPosCol1 + 5, yPos);
     
-    drawCheckCircle(xPosCol2, yPos-2, oilChange.filtroHabitaculo);
+    drawCheckCircle(xPosCol2, yPos-2, !!oilChange.filtroHabitaculo);
     pdf.text('Filtro de Habitáculo', xPosCol2 + 5, yPos);
     
     yPos += 10;
-    drawCheckCircle(xPosCol1, yPos-2, oilChange.filtroAire);
+    drawCheckCircle(xPosCol1, yPos-2, !!oilChange.filtroAire);
     pdf.text('Filtro de Aire', xPosCol1 + 5, yPos);
     
-    drawCheckCircle(xPosCol2, yPos-2, oilChange.filtroCombustible);
+    drawCheckCircle(xPosCol2, yPos-2, !!oilChange.filtroCombustible);
     pdf.text('Filtro de Combustible', xPosCol2 + 5, yPos);
     
     // Aditivos y servicios - segunda fila
     yPos += 10;
-    drawCheckCircle(xPosCol1, yPos-2, oilChange.aditivo);
+    drawCheckCircle(xPosCol1, yPos-2, !!oilChange.aditivo);
     pdf.text('Aditivo', xPosCol1 + 5, yPos);
     
-    drawCheckCircle(xPosCol2, yPos-2, oilChange.refrigerante);
+    drawCheckCircle(xPosCol2, yPos-2, !!oilChange.refrigerante);
     pdf.text('Refrigerante', xPosCol2 + 5, yPos);
     
     // Servicios adicionales - tercera fila
     yPos += 10;
-    drawCheckCircle(xPosCol1, yPos-2, oilChange.diferencial);
+    drawCheckCircle(xPosCol1, yPos-2, !!oilChange.diferencial);
     pdf.text('Diferencial', xPosCol1 + 5, yPos);
     
-    drawCheckCircle(xPosCol2, yPos-2, oilChange.caja);
+    drawCheckCircle(xPosCol2, yPos-2, !!oilChange.caja);
     pdf.text('Caja', xPosCol2 + 5, yPos);
     
-    // Engrase - cuarta fila
+     // Engrase - cuarta fila
     yPos += 10;
-    drawCheckCircle(xPosCol1, yPos-2, oilChange.engrase);
+    drawCheckCircle(xPosCol1, yPos-2, !!oilChange.engrase);
     pdf.text('Engrase', xPosCol1 + 5, yPos);
     
     // Observaciones si existen
@@ -490,9 +583,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.save(filename);
     
     return filename;
-   
-} // Cierre de la función generateDirectPDF
-}; // Cierre del objeto enhancedPdfService
+  }
+};
 
 export default enhancedPdfService;
- 

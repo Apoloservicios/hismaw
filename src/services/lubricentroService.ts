@@ -21,8 +21,11 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db } from '../lib/firebase';
 import { Lubricentro, LubricentroStatus } from '../types';
+import cloudinaryService from './cloudinaryService';
 
 const COLLECTION_NAME = 'lubricentros';
+
+
 
 // Convertir datos de Firestore a nuestro tipo Lubricentro
 const convertFirestoreLubricentro = (doc: any): Lubricentro => {
@@ -34,6 +37,60 @@ const convertFirestoreLubricentro = (doc: any): Lubricentro => {
     trialEndDate: data.trialEndDate?.toDate(),
     updatedAt: data.updatedAt?.toDate()
   } as Lubricentro;
+};
+
+
+// Subir logo del lubricentro
+// Subir logo del lubricentro
+export const uploadLubricentroLogo = async (
+  lubricentroId: string, 
+  file: File
+): Promise<string> => {
+  try {
+    // Usar el servicio de Cloudinary para subir la imagen y obtener tanto URL como base64
+    const { url: imageUrl, base64 } = await cloudinaryService.uploadImage(file);
+    
+    // Actualizar URL y base64 en el documento del lubricentro
+    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
+      logoUrl: imageUrl,
+      logoBase64: base64,
+      updatedAt: serverTimestamp()
+    });
+    
+    return imageUrl;
+  } catch (error) {
+    console.error('Error al subir el logo:', error);
+    throw error;
+  }
+};
+
+// Eliminar logo del lubricentro
+export const deleteLubricentroLogo = async (lubricentroId: string): Promise<void> => {
+  try {
+    // Obtener el documento actual para ver si tiene logo
+    const docSnap = await getDoc(doc(db, COLLECTION_NAME, lubricentroId));
+    if (!docSnap.exists()) {
+      throw new Error('El lubricentro no existe');
+    }
+    
+    const lubricentro = docSnap.data() as Lubricentro;
+    
+    // Si tiene logoUrl, intentar eliminar la imagen de Cloudinary
+    if (lubricentro.logoUrl) {
+      // En una implementación completa, también eliminaríamos la imagen de Cloudinary
+      // Esto requeriría configuración adicional y credenciales
+      console.log('Se debería eliminar la imagen de Cloudinary:', lubricentro.logoUrl);
+    }
+    
+    // Actualizar documento del lubricentro para quitar la URL
+    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
+      logoUrl: null,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error al eliminar el logo:', error);
+    throw error;
+  }
 };
 
 // Obtener lubricentro por ID
@@ -228,55 +285,8 @@ export const updateLubricentro = async (id: string, data: Partial<Lubricentro>):
   }
 };
 
-// Subir logo del lubricentro
-export const uploadLubricentroLogo = async (
-  lubricentroId: string, 
-  file: File
-): Promise<string> => {
-  try {
-    // Obtener referencia al storage
-    const storage = getStorage();
-    const logoRef = ref(storage, `lubricentros/${lubricentroId}/logo`);
-    
-    // Subir archivo
-    await uploadBytes(logoRef, file);
-    
-    // Obtener URL de descarga
-    const downloadURL = await getDownloadURL(logoRef);
-    
-    // Actualizar URL en el documento del lubricentro
-    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
-      logoUrl: downloadURL,
-      updatedAt: serverTimestamp()
-    });
-    
-    return downloadURL;
-  } catch (error) {
-    console.error('Error al subir el logo:', error);
-    throw error;
-  }
-};
 
-// Eliminar logo del lubricentro
-export const deleteLubricentroLogo = async (lubricentroId: string): Promise<void> => {
-  try {
-    // Obtener referencia al storage
-    const storage = getStorage();
-    const logoRef = ref(storage, `lubricentros/${lubricentroId}/logo`);
-    
-    // Eliminar archivo
-    await deleteObject(logoRef);
-    
-    // Actualizar documento del lubricentro
-    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
-      logoUrl: null,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error al eliminar el logo:', error);
-    throw error;
-  }
-};
+
 
 // Actualizar estado del lubricentro
 export const updateLubricentroStatus = async (id: string, estado: LubricentroStatus): Promise<void> => {

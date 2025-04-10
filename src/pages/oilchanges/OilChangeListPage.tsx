@@ -169,7 +169,12 @@ const OilChangeListPage: React.FC = () => {
     loadInitialData();
   };
   
-// Generar PDF para un cambio de aceite
+// Función generatePDF actualizada para OilChangeListPage.tsx
+
+/**
+ * Genera un PDF para un cambio de aceite seleccionado
+ * @param oilChangeId ID del cambio de aceite
+ */
 const generatePDF = async (oilChangeId: string) => {
   try {
     setError(null);
@@ -177,56 +182,22 @@ const generatePDF = async (oilChangeId: string) => {
     
     // Obtener los datos del cambio de aceite
     const oilChange = await getOilChangeById(oilChangeId);
-    setSelectedOilChange(oilChange);
     
     // Obtener datos del lubricentro
     let lubricentro: Lubricentro | null = null;
     if (oilChange.lubricentroId) {
       lubricentro = await getLubricentroById(oilChange.lubricentroId);
-      setSelectedLubricentro(lubricentro);
     }
     
-    // Mostrar vista previa
-    setShowingPdfPreview(true);
+    // Usar el método directo que no depende de html2canvas
+    enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
+    console.log("PDF generado exitosamente con método directo");
     
-    // Esperar a que la vista previa se renderice
-    setTimeout(async () => {
-      if (pdfTemplateRef.current) {
-        try {
-          // Usar la nueva plantilla mejorada mediante el servicio mejorado
-          const filename = `cambio-aceite-${oilChange.nroCambio}.pdf`;
-          await enhancedPdfService.generatePDF(pdfTemplateRef.current, filename);
-        } catch (err) {
-          console.error("Error al generar PDF:", err);
-          
-          // Si falla html2canvas, recurrir a generación directa de PDF
-          if (oilChange && lubricentro !== null) {
-            enhancedPdfService.generateDirectPDF(oilChange as OilChange, lubricentro as Lubricentro);
-          } else if (oilChange) {
-            enhancedPdfService.generateDirectPDF(oilChange as OilChange, null);
-          }
-        }
-        
-        // Ocultar vista previa
-        setShowingPdfPreview(false);
-        setGeneratingPdf(false);
-      }
-    }, 500);
-    
-  } catch (err) {
-    console.error('Error al preparar el PDF:', err);
-    setError('Error al preparar el PDF. Por favor, intente nuevamente.');
-    setShowingPdfPreview(false);
     setGeneratingPdf(false);
-    
-    // Intentar con el método de respaldo si falla el principal
-    if (selectedOilChange) {
-      try {
-        enhancedPdfService.generateDirectPDF(selectedOilChange, selectedLubricentro);
-      } catch (backupError) {
-        console.error('Error en método de respaldo:', backupError);
-      }
-    }
+  } catch (err) {
+    console.error('Error al generar PDF:', err);
+    setError('Error al generar el PDF. Por favor, intente nuevamente.');
+    setGeneratingPdf(false);
   }
 };
   

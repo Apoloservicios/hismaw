@@ -40,8 +40,10 @@ import VehicleReportPage from './pages/reports/VehicleReportPage';
 import UpcomingServicesPage from './pages/services/UpcomingServicesPage';
 import SupportPage from './pages/support/SupportPage';
 
-// Pages - Admin
-import LubricentroManagementPage from './pages/admin/LubricentroManagementPage';
+// Pages - Admin Lubricentros
+import LubricentroDashboardPage from './pages/admin/LubricentroDashboardPage';
+import LubricentroFormPage from './pages/admin/LubricentroFormPage';
+import LubricentroDetailPage from './pages/admin/LubricentroDetailPage';
 
 // Components
 import PrivateRoute from './components/common/PrivateRoute';
@@ -192,12 +194,39 @@ const App: React.FC = () => {
                 } 
               />
               
-              {/* Rutas de superadmin */}
+              {/* Rutas de superadmin para la gestión de lubricentros */}
               <Route 
                 path="/superadmin/lubricentros" 
                 element={
                   <PrivateRoute requiredRoles={['superadmin']}>
-                    <LubricentroManagementPage />
+                    <LubricentroDashboardPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              <Route 
+                path="/superadmin/lubricentros/nuevo" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <LubricentroFormPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              <Route 
+                path="/superadmin/lubricentros/editar/:id" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <LubricentroFormPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              <Route 
+                path="/superadmin/lubricentros/:id" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <LubricentroDetailPage />
                   </PrivateRoute>
                 } 
               />

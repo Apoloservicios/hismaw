@@ -7,6 +7,8 @@ import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner, Badg
 import { getOilChangeById, deleteOilChange } from '../../services/oilChangeService';
 import { getLubricentroById } from '../../services/lubricentroService';
 import { OilChange, Lubricentro } from '../../types';
+import EnhancedPrintComponent from '../../components/print/EnhancedPrintComponent';
+import { enhancedPdfService } from '../../services/enhancedPdfService';
 
 // Iconos
 import { 
@@ -18,162 +20,6 @@ import {
   ChevronLeftIcon,
   DocumentDuplicateIcon
 } from '@heroicons/react/24/outline';
-
-// Componente para imprimir
-const PrintComponent = React.forwardRef<HTMLDivElement, { oilChange: OilChange, lubricentro: Lubricentro | null }>(
-  ({ oilChange, lubricentro }, ref) => {
-    // Formatear fecha
-    const formatDate = (date: Date): string => {
-      return new Date(date).toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    };
-    
-    return (
-      <div ref={ref} className="p-8 bg-white">
-        <div className="border-b border-gray-200 pb-4 mb-6">
-          {lubricentro && (
-            <div className="text-center mb-4">
-              <h1 className="text-2xl font-bold">{lubricentro.fantasyName}</h1>
-              <p className="text-gray-600">{lubricentro.domicilio}</p>
-              <p className="text-gray-600">CUIT: {lubricentro.cuit} - Tel: {lubricentro.phone}</p>
-              <p className="text-gray-600">{lubricentro.email}</p>
-            </div>
-          )}
-          
-          <div className="text-center">
-            <h2 className="text-xl font-semibold">COMPROBANTE DE CAMBIO DE ACEITE</h2>
-            <p className="text-lg font-bold mt-1">Nº {oilChange.nroCambio}</p>
-            <p className="text-gray-600 mt-1">Fecha: {formatDate(oilChange.fecha)}</p>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Cliente</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p><span className="font-semibold">Nombre:</span> {oilChange.nombreCliente}</p>
-              {oilChange.celular && <p><span className="font-semibold">Teléfono:</span> {oilChange.celular}</p>}
-            </div>
-            <div>
-              <p><span className="font-semibold">Operador:</span> {oilChange.nombreOperario}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Vehículo</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p><span className="font-semibold">Dominio:</span> {oilChange.dominioVehiculo}</p>
-              <p><span className="font-semibold">Marca:</span> {oilChange.marcaVehiculo}</p>
-              <p><span className="font-semibold">Modelo:</span> {oilChange.modeloVehiculo}</p>
-            </div>
-            <div>
-              <p><span className="font-semibold">Tipo:</span> {oilChange.tipoVehiculo}</p>
-              {oilChange.añoVehiculo && <p><span className="font-semibold">Año:</span> {oilChange.añoVehiculo}</p>}
-              <p><span className="font-semibold">Kilometraje Actual:</span> {oilChange.kmActuales.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Datos del Servicio</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p><span className="font-semibold">Aceite:</span> {oilChange.marcaAceite} {oilChange.tipoAceite} {oilChange.sae}</p>
-              <p><span className="font-semibold">Cantidad:</span> {oilChange.cantidadAceite} Litros</p>
-            </div>
-            <div>
-              <p><span className="font-semibold">Próximo Cambio Km:</span> {oilChange.kmProximo.toLocaleString()}</p>
-              <p><span className="font-semibold">Próximo Cambio Fecha:</span> {formatDate(oilChange.fechaProximoCambio)}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Filtros y Servicios Adicionales</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              {oilChange.filtroAceite && (
-                <p>
-                  <span className="font-semibold">Filtro de Aceite:</span> Sí
-                  {oilChange.filtroAceiteNota && ` (${oilChange.filtroAceiteNota})`}
-                </p>
-              )}
-              {oilChange.filtroAire && (
-                <p>
-                  <span className="font-semibold">Filtro de Aire:</span> Sí
-                  {oilChange.filtroAireNota && ` (${oilChange.filtroAireNota})`}
-                </p>
-              )}
-              {oilChange.filtroHabitaculo && (
-                <p>
-                  <span className="font-semibold">Filtro de Habitáculo:</span> Sí
-                  {oilChange.filtroHabitaculoNota && ` (${oilChange.filtroHabitaculoNota})`}
-                </p>
-              )}
-              {oilChange.filtroCombustible && (
-                <p>
-                  <span className="font-semibold">Filtro de Combustible:</span> Sí
-                  {oilChange.filtroCombustibleNota && ` (${oilChange.filtroCombustibleNota})`}
-                </p>
-              )}
-            </div>
-            <div>
-              {oilChange.aditivo && (
-                <p>
-                  <span className="font-semibold">Aditivo:</span> Sí
-                  {oilChange.aditivoNota && ` (${oilChange.aditivoNota})`}
-                </p>
-              )}
-              {oilChange.refrigerante && (
-                <p>
-                  <span className="font-semibold">Refrigerante:</span> Sí
-                  {oilChange.refrigeranteNota && ` (${oilChange.refrigeranteNota})`}
-                </p>
-              )}
-              {oilChange.diferencial && (
-                <p>
-                  <span className="font-semibold">Diferencial:</span> Sí
-                  {oilChange.diferencialNota && ` (${oilChange.diferencialNota})`}
-                </p>
-              )}
-              {oilChange.caja && (
-                <p>
-                  <span className="font-semibold">Caja:</span> Sí
-                  {oilChange.cajaNota && ` (${oilChange.cajaNota})`}
-                </p>
-              )}
-              {oilChange.engrase && (
-                <p>
-                  <span className="font-semibold">Engrase:</span> Sí
-                  {oilChange.engraseNota && ` (${oilChange.engraseNota})`}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {oilChange.observaciones && (
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold border-b border-gray-200 pb-2 mb-3">Observaciones</h3>
-            <p className="whitespace-pre-line">{oilChange.observaciones}</p>
-          </div>
-        )}
-        
-        <div className="mt-10 border-t border-gray-200 pt-6 text-center">
-          <p className="text-sm text-gray-500">Este documento no es válido como factura.</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Próximo cambio: a los {oilChange.kmProximo.toLocaleString()} km o el {formatDate(oilChange.fechaProximoCambio)}, lo que ocurra primero.
-          </p>
-        </div>
-      </div>
-    );
-  }
-);
 
 const OilChangeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -226,11 +72,33 @@ const OilChangeDetailPage: React.FC = () => {
   };
   
   // Manejar la impresión
- // Manejar la impresión
-const handlePrint = useReactToPrint({
- // content: () => printRef.current,
-  documentTitle: `Cambio de Aceite - ${oilChange?.nroCambio}`,
-});
+  const handlePrint = useReactToPrint({
+    
+    documentTitle: `Cambio de Aceite - ${oilChange?.nroCambio}`,
+    onAfterPrint: () => {
+      console.log('Impresión completada');
+    },
+    content: () => printRef.current
+    
+  });
+  
+  // Generar PDF con diseño mejorado
+  const handleGeneratePDF = async () => {
+    if (!oilChange || !printRef.current) return;
+    
+    try {
+      const filename = `cambio-aceite-${oilChange.nroCambio}.pdf`;
+      await enhancedPdfService.generatePDF(printRef.current, filename);
+    } catch (err) {
+      console.error('Error al generar PDF:', err);
+      setError('Error al generar el PDF. Por favor, intente nuevamente.');
+      
+      // Método de respaldo si falla el principal
+      if (oilChange) {
+        enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
+      }
+    }
+  };
   
   // Manejar la eliminación
   const handleDelete = async () => {
@@ -249,31 +117,18 @@ const handlePrint = useReactToPrint({
     }
   };
   
-  // Compartir por WhatsApp
+  // Compartir por WhatsApp usando el formato mejorado
   const shareViaWhatsApp = () => {
     if (!oilChange || !lubricentro) return;
     
-    const message = `
-*${lubricentro.fantasyName}*
-*Constancia de Cambio de Aceite*
-*N°:* ${oilChange.nroCambio}
-
-*Cliente:* ${oilChange.nombreCliente}
-*Vehículo:* ${oilChange.marcaVehiculo} ${oilChange.modeloVehiculo} - ${oilChange.dominioVehiculo}
-*Km:* ${oilChange.kmActuales.toLocaleString()}
-*Aceite:* ${oilChange.marcaAceite} ${oilChange.tipoAceite} ${oilChange.sae}
-
-*Próximo cambio:* ${oilChange.kmProximo.toLocaleString()} km o ${new Date(oilChange.fechaProximoCambio).toLocaleDateString()}
-
-Gracias por confiar en nosotros!
-    `;
+    // Usar el servicio mejorado para generar el mensaje
+    const { whatsappUrl, whatsappUrlWithPhone } = enhancedPdfService.generateWhatsAppMessage(
+      oilChange,
+      lubricentro.fantasyName
+    );
     
-    // Crear url para WhatsApp
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    
-    // Abrir en nueva ventana
-    window.open(whatsappUrl, '_blank');
+    // Abrir en nueva ventana - priorizar URL con teléfono si está disponible
+    window.open(whatsappUrlWithPhone || whatsappUrl, '_blank');
   };
   
   // Formatear fecha
@@ -494,11 +349,12 @@ Gracias por confiar en nosotros!
         </Card>
       </div>
       
-      {/* Filtros y Servicios Adicionales */}
+      {/* Filtros y servicios adicionales */}
       <Card className="mb-6">
         <CardHeader title="Filtros y Servicios Adicionales" />
         <CardBody>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {/* Filtro de aceite */}
             {oilChange.filtroAceite && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Filtro de Aceite</p>
@@ -508,6 +364,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Filtro de aire */}
             {oilChange.filtroAire && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Filtro de Aire</p>
@@ -517,6 +374,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Filtro de habitáculo */}
             {oilChange.filtroHabitaculo && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Filtro de Habitáculo</p>
@@ -526,6 +384,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Filtro de combustible */}
             {oilChange.filtroCombustible && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Filtro de Combustible</p>
@@ -535,6 +394,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Aditivo */}
             {oilChange.aditivo && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Aditivo</p>
@@ -544,6 +404,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Refrigerante */}
             {oilChange.refrigerante && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Refrigerante</p>
@@ -553,6 +414,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Diferencial */}
             {oilChange.diferencial && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Diferencial</p>
@@ -562,6 +424,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Caja */}
             {oilChange.caja && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Caja</p>
@@ -571,6 +434,7 @@ Gracias por confiar en nosotros!
               </div>
             )}
             
+            {/* Engrase */}
             {oilChange.engrase && (
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="font-medium text-green-800">Engrase</p>
@@ -631,9 +495,13 @@ Gracias por confiar en nosotros!
         </CardBody>
       </Card>
       
-      {/* Componente de impresión (oculto) */}
+      {/* Componente de impresión mejorado (oculto) */}
       <div className="hidden">
-        <PrintComponent ref={printRef} oilChange={oilChange} lubricentro={lubricentro} />
+        <EnhancedPrintComponent 
+          ref={printRef} 
+          oilChange={oilChange} 
+          lubricentro={lubricentro} 
+        />
       </div>
     </PageContainer>
   );

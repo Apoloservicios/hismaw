@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Alert, Button, Spinner } from '../../components/ui';
-import { getActiveLubricentros } from '../../services/lubricentroService';
-import { Lubricentro } from '../../types';
-
+import { getActiveLubricentros, createLubricentro } from '../../services/lubricentroService';
+import { Lubricentro, LubricentroStatus } from '../../types';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 // Iconos
 import { EnvelopeIcon, LockClosedIcon, UserIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
@@ -166,15 +167,42 @@ const RegisterPage: React.FC = () => {
       setError(null);
       
       if (registerType === 'lubricentro') {
-        // Registrar como dueño de lubricentro (admin)
-        await register(formData.email, formData.password, {
+        // 1. Registrar como dueño de lubricentro (admin)
+        const adminId = await register(formData.email, formData.password, {
           nombre: formData.nombre,
           apellido: formData.apellido,
           role: 'admin',
           estado: 'activo', // Estado activo para dueños
         });
         
-        // Redirigir a página de éxito - la creación del lubricentro continúa en el AuthContext
+        // 2. Crear el lubricentro
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 días de prueba
+        
+        const lubricentroData = {
+          fantasyName: formData.fantasyName,
+          responsable: formData.responsable,
+          domicilio: formData.domicilio,
+          cuit: formData.cuit,
+          phone: formData.phone,
+          email: formData.email,
+          estado: 'trial' as LubricentroStatus, // Usar casting explícito aquí
+          ticketPrefix: formData.ticketPrefix,
+          ownerId: adminId,
+          location: {},
+          trialEndDate: trialEndDate
+        };
+        
+        const lubricentroId = await createLubricentro(lubricentroData);
+        
+        // 3. Actualizar el usuario con el ID del lubricentro
+        if (adminId && lubricentroId) {
+          await updateDoc(doc(db, 'usuarios', adminId), {
+            lubricentroId: lubricentroId
+          });
+        }
+        
+        // Redirigir a página de éxito
         navigate('/registro-exitoso');
       } else {
         // Registrar como empleado
@@ -191,6 +219,7 @@ const RegisterPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error al registrar:', err);
+      
       
       // Manejar distintos tipos de errores
       if (err.code === 'auth/email-already-in-use') {

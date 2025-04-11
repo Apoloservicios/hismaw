@@ -14,17 +14,17 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
 
+// En AuthContext.tsx, modifica la interfaz
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   userProfile: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, userData: Partial<User>) => Promise<void>;
+  register: (email: string, password: string, userData: Partial<User>) => Promise<string>; // Cambiado a Promise<string>
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (userData: Partial<User>) => Promise<void>;
 }
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
@@ -71,21 +71,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     // Configurar persistencia
     setPersistence(auth, browserLocalPersistence);
-
+  
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        await fetchUserProfile(user.uid);
-        // Actualizar último inicio de sesión
-        await updateDoc(doc(db, 'usuarios', user.uid), {
-          lastLogin: serverTimestamp()
-        });
+        try {
+          // Primero verificamos si existe el documento
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          if (userDocSnap.exists()) {
+            // Si existe, podemos obtener los datos y actualizar el último login
+            await fetchUserProfile(user.uid);
+            await updateDoc(userDocRef, {
+              lastLogin: serverTimestamp()
+            });
+          } else {
+            // Si no existe, no hacemos nada por ahora o podemos manejar de otra forma
+            console.warn(`Usuario autenticado pero sin documento en Firestore: ${user.uid}`);
+            setUserProfile(null);
+          }
+        } catch (error) {
+          console.error('Error al procesar usuario autenticado:', error);
+          setUserProfile(null);
+        }
       } else {
         setUserProfile(null);
       }
       setLoading(false);
     });
-
+  
     return () => unsubscribe();
   }, []);
 
@@ -102,40 +117,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Función para registrar un nuevo usuario
-  const register = async (email: string, password: string, userData: Partial<User>) => {
-    try {
-      setLoading(true);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+// Función para registrar un nuevo usuario
+const register = async (email: string, password: string, userData: Partial<User>): Promise<string> => {
+  try {
+    setLoading(true);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-      // Crear perfil en Firestore
-      const newUser: User = {
-        id: user.uid,
-        nombre: userData.nombre || '',
-        apellido: userData.apellido || '',
-        email: user.email || '',
-        role: userData.role || 'user',
-        estado: userData.role === 'superadmin' ? 'activo' : 'pendiente', // Solo los superadmin están activos automáticamente
-        lubricentroId: userData.lubricentroId,
-        lastLogin: new Date(),
-        createdAt: new Date()
-      };
+    // Crear objeto base del usuario
+    const newUser: Partial<User> = {
+      id: user.uid,
+      nombre: userData.nombre || '',
+      apellido: userData.apellido || '',
+      email: user.email || '',
+      role: userData.role || 'user',
+      estado: userData.role === 'superadmin' ? 'activo' : userData.estado || 'pendiente',
+      lastLogin: new Date(),
+      createdAt: new Date()
+    };
 
-      await setDoc(doc(db, 'usuarios', user.uid), {
-        ...newUser,
-        lastLogin: serverTimestamp(),
-        createdAt: serverTimestamp()
-      });
-      
-      setUserProfile(newUser);
-    } catch (error) {
-      console.error('Error al registrar usuario:', error);
-      throw error;
-    } finally {
-      setLoading(false);
+    // Añadir lubricentroId solo si existe
+    if (userData.lubricentroId) {
+      newUser.lubricentroId = userData.lubricentroId;
     }
-  };
+
+    // Crear perfil en Firestore
+    await setDoc(doc(db, 'usuarios', user.uid), {
+      ...newUser,
+      lastLogin: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
+    
+    setUserProfile(newUser as User);
+    return user.uid; // Devolver el ID del usuario creado
+  } catch (error) {
+    console.error('Error al registrar usuario:', error);
+    throw error;
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Función para cerrar sesión
   const logout = async () => {
@@ -185,13 +206,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextType = {
     currentUser,
-    userProfile,
-    loading,
-    login,
-    register,
-    logout,
-    resetPassword,
-    updateUserProfile
+  userProfile,
+  loading,
+  login,
+  register,
+  logout,
+  resetPassword,
+  updateUserProfile
   };
 
   return (

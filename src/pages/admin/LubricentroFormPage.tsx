@@ -28,6 +28,9 @@ import { createUser } from '../../services/userService';
 import ImageUploader from '../../components/common/ImageUploader';
 import { Lubricentro, LubricentroStatus } from '../../types';
 
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+
 // Iconos
 import { 
   BuildingOfficeIcon,
@@ -266,13 +269,13 @@ const LubricentroFormPage: React.FC = () => {
         // 1. Crear usuario administrador
         let adminUserId;
         try {
-          // CORREGIDO: Añadido el campo email que faltaba
           adminUserId = await createUser(formData.adminEmail, formData.adminPassword, {
             nombre: formData.adminNombre,
             apellido: formData.adminApellido,
             email: formData.adminEmail,
             role: 'admin',
             estado: 'activo'
+            // No incluimos lubricentroId aquí
           });
         } catch (err) {
           console.error('Error al crear el usuario administrador:', err);
@@ -299,6 +302,20 @@ const LubricentroFormPage: React.FC = () => {
             location: {},
             trialEndDate: trialEndDate
           });
+          
+          // 3. Actualizar el usuario con el ID del lubricentro
+          if (adminUserId && lubricentroId) {
+            try {
+              const userRef = doc(db, 'usuarios', adminUserId);
+              await updateDoc(userRef, {
+                lubricentroId: lubricentroId
+              });
+            } catch (updateErr) {
+              console.error('Error al actualizar el usuario con el ID del lubricentro:', updateErr);
+              // No es crítico si falla, continuamos sin lanzar error
+            }
+          }
+          
         } catch (err) {
           console.error('Error al crear el lubricentro:', err);
           throw new Error('Error al crear el lubricentro. Por favor, intente nuevamente.');

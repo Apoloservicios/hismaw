@@ -18,6 +18,7 @@ import {
   BellIcon,
   Cog6ToothIcon,
   BuildingStorefrontIcon,
+  BuildingOfficeIcon, 
   QuestionMarkCircleIcon,
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
@@ -68,6 +69,37 @@ const MainLayout: React.FC = () => {
   const getMenuItems = () => {
     const items = [];
     
+    // Para superadmin, mostrar menú limitado
+    if (userProfile.role === 'superadmin') {
+      return [
+        { 
+          text: 'Dashboard', 
+          icon: <HomeIcon className="w-5 h-5" />, 
+          path: '/dashboard',
+          divider: false
+        },
+        { 
+          text: 'Gestión de Lubricentros', 
+          icon: <BuildingOfficeIcon className="w-5 h-5" />, 
+          path: '/superadmin/lubricentros',
+          divider: false
+        },
+        { 
+          text: 'Estadísticas Globales', 
+          icon: <ChartBarIcon className="w-5 h-5" />, 
+          path: '/superadmin/reportes',
+          divider: true
+        },
+        { 
+          text: 'Mi Perfil', 
+          icon: <UserIcon className="w-5 h-5" />, 
+          path: '/perfil',
+          divider: false
+        }
+      ];
+    }
+    
+    // Para usuarios que NO son superadmin (admin y user)
     // Para todos los usuarios autenticados
     items.push(
       { 
@@ -84,20 +116,8 @@ const MainLayout: React.FC = () => {
       },
     );
     
-    // Para superadmin solamente
-    if (userProfile.role === 'superadmin') {
-      items.push(
-        { 
-          text: 'Gestión de Lubricentros', 
-          icon: <BuildingStorefrontIcon className="w-5 h-5" />, 
-          path: '/superadmin/lubricentros',
-          divider: false
-        },
-      );
-    }
-    
-    // Para admin y superadmin
-    if (userProfile.role === 'admin' || userProfile.role === 'superadmin') {
+    // Para admin
+    if (userProfile.role === 'admin') {
       items.push(
         { 
           text: 'Usuarios', 
@@ -114,7 +134,7 @@ const MainLayout: React.FC = () => {
       );
     }
     
-    // Para todos los usuarios autenticados (continuación)
+    // Para todos los usuarios que no son superadmin (continuación)
     items.push(
       { 
         text: 'Próximos Servicios', 
@@ -134,10 +154,6 @@ const MainLayout: React.FC = () => {
         path: '/soporte',
         divider: false
       },
-    );
-    
-    // Para rutas públicas
-    items.push(
       { 
         text: 'Consulta Historial', 
         icon: <MagnifyingGlassIcon className="w-5 h-5" />, 

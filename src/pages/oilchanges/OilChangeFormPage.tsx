@@ -45,6 +45,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const OilChangeFormPage: React.FC = () => {
+  // Código existente para estados y efectos...
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -57,6 +58,7 @@ const OilChangeFormPage: React.FC = () => {
   
   // Estado del formulario
   const [formData, setFormData] = useState<Partial<OilChange>>({
+    // Todos los campos existentes...
     lubricentroId: userProfile?.lubricentroId || '',
     lubricentroNombre: '',
     fecha: new Date(),
@@ -118,6 +120,7 @@ const OilChangeFormPage: React.FC = () => {
   const [lubricentro, setLubricentro] = useState<Lubricentro | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
+  // Código existente para efectos, manejadores, etc...
   // Obtener datos iniciales
   useEffect(() => {
     const fetchData = async () => {
@@ -251,6 +254,7 @@ const OilChangeFormPage: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     
+    // Validaciones existentes...
     // Validar campos obligatorios
     if (!formData.nombreCliente?.trim()) {
       errors.nombreCliente = 'El nombre del cliente es obligatorio';
@@ -408,7 +412,7 @@ const OilChangeFormPage: React.FC = () => {
         <Card className="mb-6">
           <CardHeader title="Datos del Cliente" />
           <CardBody>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <Input
                 label="Nombre del Cliente"
                 name="nombreCliente"
@@ -418,7 +422,7 @@ const OilChangeFormPage: React.FC = () => {
                 required
                 icon={<UserIcon className="h-5 w-5 text-gray-400" />}
                 error={validationErrors.nombreCliente}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -428,7 +432,7 @@ const OilChangeFormPage: React.FC = () => {
                 onChange={handleChange}
                 placeholder="Número de contacto"
                 icon={<PhoneIcon className="h-5 w-5 text-gray-400" />}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -439,7 +443,7 @@ const OilChangeFormPage: React.FC = () => {
                 onChange={handleChange}
                 required
                 icon={<CalendarIcon className="h-5 w-5 text-gray-400" />}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -450,7 +454,7 @@ const OilChangeFormPage: React.FC = () => {
                 placeholder="Nombre del operador"
                 required
                 icon={<WrenchIcon className="h-5 w-5 text-gray-400" />}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
             </div>
           </CardBody>
@@ -460,7 +464,7 @@ const OilChangeFormPage: React.FC = () => {
         <Card className="mb-6">
           <CardHeader title="Datos del Vehículo" />
           <CardBody>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <Input
                 label="Dominio (Patente)"
                 name="dominioVehiculo"
@@ -471,7 +475,7 @@ const OilChangeFormPage: React.FC = () => {
                 icon={<TruckIcon className="h-5 w-5 text-gray-400" />}
                 error={validationErrors.dominioVehiculo}
                 helperText="Formatos válidos: AA123BB, AAA123, A123BCD"
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm uppercase"
               />
               
               <Select
@@ -481,20 +485,22 @@ const OilChangeFormPage: React.FC = () => {
                 onChange={handleChange}
                 options={tiposVehiculo.map(tipo => ({ value: tipo, label: tipo }))}
                 required
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
-              <AutocompleteInput
-                label="Marca"
-                name="marcaVehiculo"
-                value={formData.marcaVehiculo || ''}
-                onChange={handleChange}
-                options={autocompleteOptions.todasMarcasVehiculos}
-                placeholder="Marca del vehículo"
-                required
-                error={validationErrors.marcaVehiculo}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
-              />
+              <div className="z-20 relative"> {/* Aumentar z-index para autocompletado */}
+                <AutocompleteInput
+                  label="Marca"
+                  name="marcaVehiculo"
+                  value={formData.marcaVehiculo || ''}
+                  onChange={handleChange}
+                  options={autocompleteOptions.todasMarcasVehiculos}
+                  placeholder="Marca del vehículo"
+                  required
+                  error={validationErrors.marcaVehiculo}
+                  className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
+                />
+              </div>
               
               <Input
                 label="Modelo"
@@ -504,7 +510,7 @@ const OilChangeFormPage: React.FC = () => {
                 placeholder="Modelo del vehículo"
                 required
                 error={validationErrors.modeloVehiculo}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -516,7 +522,7 @@ const OilChangeFormPage: React.FC = () => {
                 placeholder="Año del vehículo"
                 helperText={`Entre 1900 y ${new Date().getFullYear() + 1}`}
                 error={validationErrors.añoVehiculo}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -529,7 +535,7 @@ const OilChangeFormPage: React.FC = () => {
                 required
                 error={validationErrors.kmActuales}
                 helperText="Ingrese un valor mayor o igual a 0"
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -540,7 +546,7 @@ const OilChangeFormPage: React.FC = () => {
                 onChange={handleChange}
                 required
                 helperText="Entre 1 y 24 meses"
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
               
               <Input
@@ -551,7 +557,7 @@ const OilChangeFormPage: React.FC = () => {
                 onChange={handleChange}
                 placeholder="Km para el próximo cambio"
                 required
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                 helperText={`Sugerencia: ${(formData.kmActuales || 0) + 10000} km (debe ser mayor que el kilometraje actual)`}
               />
             </div>
@@ -562,42 +568,48 @@ const OilChangeFormPage: React.FC = () => {
         <Card className="mb-6">
           <CardHeader title="Datos del Servicio" />
           <CardBody>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 min-h-500">
-              <AutocompleteInput
-                label="Marca de Aceite"
-                name="marcaAceite"
-                value={formData.marcaAceite || ''}
-                onChange={handleChange}
-                options={autocompleteOptions.marcasAceite}
-                placeholder="Marca del aceite"
-                required
-                error={validationErrors.marcaAceite}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
-              />
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 min-h-500">
+              <div className="z-30 relative"> {/* Aumentar z-index para autocompletado */}
+                <AutocompleteInput
+                  label="Marca de Aceite"
+                  name="marcaAceite"
+                  value={formData.marcaAceite || ''}
+                  onChange={handleChange}
+                  options={autocompleteOptions.marcasAceite}
+                  placeholder="Marca del aceite"
+                  required
+                  error={validationErrors.marcaAceite}
+                  className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
+                />
+              </div>
               
-              <AutocompleteInput
-                label="Tipo de Aceite"
-                name="tipoAceite"
-                value={formData.tipoAceite || ''}
-                onChange={handleChange}
-                options={autocompleteOptions.tiposAceite}
-                placeholder="Tipo de aceite"
-                required
-                error={validationErrors.tipoAceite}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
-              />
+              <div className="z-20 relative"> {/* Aumentar z-index para autocompletado */}
+                <AutocompleteInput
+                  label="Tipo de Aceite"
+                  name="tipoAceite"
+                  value={formData.tipoAceite || ''}
+                  onChange={handleChange}
+                  options={autocompleteOptions.tiposAceite}
+                  placeholder="Tipo de aceite"
+                  required
+                  error={validationErrors.tipoAceite}
+                  className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
+                />
+              </div>
               
-              <AutocompleteInput
-                label="Viscosidad (SAE)"
-                name="sae"
-                value={formData.sae || ''}
-                onChange={handleChange}
-                options={autocompleteOptions.viscosidad}
-                placeholder="Ej: 5W-30"
-                required
-                error={validationErrors.sae}
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
-              />
+              <div className="z-10 relative"> {/* Aumentar z-index para autocompletado */}
+                <AutocompleteInput
+                  label="Viscosidad (SAE)"
+                  name="sae"
+                  value={formData.sae || ''}
+                  onChange={handleChange}
+                  options={autocompleteOptions.viscosidad}
+                  placeholder="Ej: 5W-30"
+                  required
+                  error={validationErrors.sae}
+                  className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
+                />
+              </div>
               
               <Input
                 label="Cantidad (litros)"
@@ -608,7 +620,7 @@ const OilChangeFormPage: React.FC = () => {
                 required
                 error={validationErrors.cantidadAceite}
                 helperText="Ingrese un valor mayor a 0"
-                className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
               />
             </div>
           </CardBody>
@@ -618,9 +630,9 @@ const OilChangeFormPage: React.FC = () => {
         <Card className="mb-6">
           <CardHeader title="Filtros y Servicios Adicionales" />
           <CardBody>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {/* Filtro de aceite */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Filtro de Aceite"
@@ -637,13 +649,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.filtroAceiteNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Filtro de aire */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Filtro de Aire"
@@ -660,13 +672,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.filtroAireNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Filtro de habitáculo */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Filtro de Habitáculo"
@@ -683,13 +695,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.filtroHabitaculoNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Filtro de combustible */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Filtro de Combustible"
@@ -706,13 +718,14 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.filtroCombustibleNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Aditivo */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+           {/* Aditivo */}
+           <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Aditivo"
@@ -729,13 +742,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.aditivoNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Refrigerante */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Refrigerante"
@@ -752,13 +765,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.refrigeranteNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Diferencial */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Diferencial"
@@ -775,13 +788,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.diferencialNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Caja */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Caja"
@@ -798,13 +811,13 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.cajaNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
               
               {/* Engrase */}
-              <div className="p-4 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50">
+              <div className="p-4 border-2 border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition duration-150">
                 <div className="flex items-center mb-3">
                   <Checkbox
                     label="Engrase"
@@ -821,7 +834,7 @@ const OilChangeFormPage: React.FC = () => {
                     value={formData.engraseNota || ''}
                     onChange={handleChange}
                     placeholder="Marca, tipo, observaciones..."
-                    className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+                    className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
                   />
                 )}
               </div>
@@ -840,7 +853,7 @@ const OilChangeFormPage: React.FC = () => {
               onChange={handleChange}
               placeholder="Ingrese cualquier observación adicional..."
               rows={4}
-              className="border border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+              className="border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring focus:ring-primary-100 focus:ring-opacity-50 shadow-sm"
             />
           </CardBody>
         </Card>

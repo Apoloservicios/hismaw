@@ -28,12 +28,33 @@ const convertFirestoreOilChange = (doc: any): OilChange => {
   return {
     id: doc.id,
     ...data,
-    fecha: data.fecha?.toDate() || new Date(),
-    fechaServicio: data.fechaServicio?.toDate() || new Date(),
-    fechaProximoCambio: data.fechaProximoCambio?.toDate() || new Date(),
-    createdAt: data.createdAt?.toDate() || new Date(),
-    updatedAt: data.updatedAt?.toDate(),
+    fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha) || new Date(),
+    fechaServicio: data.fechaServicio?.toDate ? data.fechaServicio.toDate() : new Date(data.fechaServicio) || new Date(),
+    fechaProximoCambio: data.fechaProximoCambio?.toDate ? data.fechaProximoCambio.toDate() : new Date(data.fechaProximoCambio) || new Date(),
+    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt) || new Date(),
+    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt ? new Date(data.updatedAt) : undefined,
   } as OilChange;
+};
+
+// Función auxiliar para asegurar que una fecha sea un objeto Date
+const ensureDateObject = (date: any): Date => {
+  if (!date) return new Date();
+  
+  if (date instanceof Date) return date;
+  
+  if (typeof date === 'string') return new Date(date);
+  
+  if (date.toDate && typeof date.toDate === 'function') {
+    try {
+      return date.toDate();
+    } catch (e) {
+      console.warn('Error al convertir Timestamp a Date:', e);
+      return new Date();
+    }
+  }
+  
+  // Si no se pudo determinar el formato, devolver una nueva fecha
+  return new Date();
 };
 
 // Obtener cambio de aceite por ID
@@ -225,14 +246,19 @@ export const createOilChange = async (data: Omit<OilChange, 'id' | 'createdAt'>)
     // Asegurarse de que el dominio del vehículo esté en mayúsculas
     const dominioVehiculo = data.dominioVehiculo.toUpperCase();
     
+    // Asegurar que fechaServicio sea un objeto Date
+    const fechaServicio = ensureDateObject(data.fechaServicio);
+    
     // Generar fecha del próximo cambio basado en la periodicidad
-    const fechaProximoCambio = new Date(data.fechaServicio);
+    const fechaProximoCambio = new Date(fechaServicio);
     fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + data.perioricidad_servicio);
     
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...data,
       dominioVehiculo,
+      fechaServicio,  // Usar la fecha correctamente convertida
       fechaProximoCambio,
+      fecha: new Date(), // Asegurar que la fecha de registro es un Date
       createdAt: serverTimestamp()
     });
     
@@ -255,6 +281,11 @@ export const updateOilChange = async (id: string, data: Partial<OilChange>): Pro
       updateData.dominioVehiculo = data.dominioVehiculo.toUpperCase();
     }
     
+    // Convertir fechaServicio a Date si existe
+    if (data.fechaServicio) {
+      updateData.fechaServicio = ensureDateObject(data.fechaServicio);
+    }
+    
     // Si se actualiza la fecha del servicio o la periodicidad, recalcular la fecha del próximo cambio
     if (data.fechaServicio || data.perioricidad_servicio) {
       // Primero, obtener el documento actual
@@ -263,12 +294,30 @@ export const updateOilChange = async (id: string, data: Partial<OilChange>): Pro
         throw new Error('El cambio de aceite no existe');
       }
       
-      const currentData = docSnap.data() as unknown as OilChange;
-      const fechaServicio = data.fechaServicio || currentData.fechaServicio;
-      const perioricidad = data.perioricidad_servicio || currentData.perioricidad_servicio;
+      const currentData = docSnap.data();
+      
+      // Determinar qué fecha de servicio usar
+      let fechaServicioToUse;
+      if (data.fechaServicio) {
+        fechaServicioToUse = ensureDateObject(data.fechaServicio);
+      } else {
+        try {
+          // Convertir fecha existente al formato adecuado
+          if (currentData.fechaServicio && typeof currentData.fechaServicio.toDate === 'function') {
+            fechaServicioToUse = currentData.fechaServicio.toDate();
+          } else {
+            fechaServicioToUse = new Date(currentData.fechaServicio);
+          }
+        } catch (e) {
+          console.warn('Error al convertir fechaServicio existente:', e);
+          fechaServicioToUse = new Date();
+        }
+      }
+      
+      const perioricidad = data.perioricidad_servicio !== undefined ? data.perioricidad_servicio : currentData.perioricidad_servicio;
       
       // Recalcular fecha del próximo cambio
-      const fechaProximoCambio = new Date(fechaServicio instanceof Date ? fechaServicio : (fechaServicio as Timestamp).toDate());
+      const fechaProximoCambio = new Date(fechaServicioToUse);
       fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + perioricidad);
       
       updateData.fechaProximoCambio = fechaProximoCambio;
@@ -394,8 +443,6 @@ export const getOilChangesStats = async (lubricentroId: string): Promise<OilChan
     throw error;
   }
 };
-
-// Actualizar src/services/oilChangeService.ts con esta nueva función
 
 /**
  * Obtiene los cambios de aceite realizados por un operador específico

@@ -48,6 +48,8 @@ import LubricentroDetailPage from './pages/admin/LubricentroDetailPage';
 // Components
 import PrivateRoute from './components/common/PrivateRoute';
 
+import SuperAdminReportPage from './pages/admin/SuperAdminReportPage';
+
 // Create a client for React Query
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +92,17 @@ const App: React.FC = () => {
                   </PrivateRoute>
                 } 
               />
+
+              {/* Ruta para estadísticas globales del superadmin */}
+              <Route 
+                path="/superadmin/reportes" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <SuperAdminReportPage />
+                  </PrivateRoute>
+                } 
+              />
+              
               
               {/* Rutas de cambios de aceite */}
               <Route 

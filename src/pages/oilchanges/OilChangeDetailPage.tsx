@@ -178,9 +178,9 @@ const OilChangeDetailPage: React.FC = () => {
           <Button
             color="primary"
             icon={<PrinterIcon className="h-5 w-5" />}
-            onClick={handlePrint}
+            onClick={handleGeneratePDF}
           >
-            Imprimir
+            Generar PDF
           </Button>
           <Button
             color="secondary"

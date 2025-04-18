@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
+import isNumber from 'lodash/isNumber';
+
 
 interface MonthlySalesChartProps {
   data: { name: string; cantidad: number }[];

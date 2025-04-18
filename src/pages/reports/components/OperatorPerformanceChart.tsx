@@ -11,6 +11,8 @@ import {
   LabelList
 } from 'recharts';
 import { OperatorStats } from '../../../types';
+import isNumber from 'lodash/isNumber';
+
 
 interface OperatorPerformanceChartProps {
   data: OperatorStats[];

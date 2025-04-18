@@ -8,6 +8,8 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
+import isNumber from 'lodash/isNumber';
+
 
 interface ServicesByTypeChartProps {
   data: { name: string; value: number }[];
@@ -27,7 +29,8 @@ const ServicesByTypeChart: React.FC<ServicesByTypeChartProps> = ({ data }) => {
             {item.name}
           </p>
           <p className="font-semibold text-gray-800">
-            {`${item.value} servicios (${Math.round(item.percent * 100)}%)`}
+          {`${item.value} servicios${item.percent ? ` (${Math.round(item.percent * 100)}%)` : ''}`}
+
           </p>
         </div>
       );
@@ -52,7 +55,8 @@ const ServicesByTypeChart: React.FC<ServicesByTypeChartProps> = ({ data }) => {
             paddingAngle={2}
             dataKey="value"
             labelLine={false}
-            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+            label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
+
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -1,7 +1,8 @@
 // src/pages/public/HomePage.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import bg_h  from '../../assets/img/bg_hisma.jpg'
+import bg_h from '../../assets/img/bg_hisma.jpg';
+import hismaLogo from '../../assets/img/hisma_logo_horizontal.png';
 
 // Iconos
 import {
@@ -13,7 +14,7 @@ import {
   MagnifyingGlassIcon,
   UserIcon,
   ArrowRightIcon,
-  ChartBarIcon ,
+  ChartBarIcon,
   TruckIcon
 } from '@heroicons/react/24/outline';
 
@@ -35,11 +36,11 @@ const HomePage: React.FC = () => {
     <div className="bg-white">
       {/* Header */}
       <header className="relative">
-        <div className="bg-primary-700 py-6">
+        <div className="bg-primary-700 py-4">
           <nav className="relative max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6" aria-label="Global">
             <div className="flex items-center flex-1">
               <div className="flex items-center justify-between w-full md:w-auto">
-                <span className="text-white text-2xl font-bold">HISMA - Historial de Mantenimiento</span>
+                <img src={hismaLogo} alt="HISMA - Historial de Mantenimiento" className="h-10" />
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -63,10 +64,10 @@ const HomePage: React.FC = () => {
         <div className="absolute inset-0">
           <img
             className="w-full h-full object-cover"
-            src= {bg_h}
+            src={bg_h}
             alt="Persona en un taller cambiando el aceite a un vehículo"
           />
-          <div className="absolute inset-0 bg-primary-700 mix-blend-multiply" />
+          <div className="absolute inset-0 bg-gray-800 mix-blend-multiply" />
         </div>
         <div className="relative max-w-7xl mx-auto py-16 sm:px-6 sm:py-24 lg:py-32 lg:px-8">
           <h1 className="text-center text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
@@ -74,7 +75,7 @@ const HomePage: React.FC = () => {
             <span className="block text-primary-200">Simple y Eficiente</span>
           </h1>
           <p className="mt-6 max-w-lg mx-auto text-center text-xl text-white sm:max-w-3xl">
-            Sistema integral para lubricentros que permite administrar los cambios de aceite,
+            Sistema para lubricentros que permite administrar los cambios de aceite,
             realizar un seguimiento detallado de los vehículos y mantener informados a los clientes.
           </p>
 
@@ -84,7 +85,7 @@ const HomePage: React.FC = () => {
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-grow">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <TruckIcon  className="h-5 w-5 text-gray-400" />
+                    <TruckIcon className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
                     type="text"
@@ -197,7 +198,7 @@ const HomePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="mt-10 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-6 lg:max-w-4xl lg:mx-auto">
+          <div className="mt-10 space-y-6 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 sm:gap-6">
             {/* Plan Prueba Gratuito */}
             <div className="border border-gray-200 rounded-lg shadow-sm divide-y divide-gray-200 bg-white">
               <div className="p-6">
@@ -225,10 +226,6 @@ const HomePage: React.FC = () => {
                   </li>
                   <li className="flex space-x-3">
                     <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-500">Registro ilimitado de cambios</span>
-                  </li>
-                  <li className="flex space-x-3">
-                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
                     <span className="text-sm text-gray-500">Funcionalidades básicas</span>
                   </li>
                   <li className="flex space-x-3">
@@ -239,46 +236,165 @@ const HomePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Plan Premium */}
-            <div className="border border-primary-200 rounded-lg shadow-sm divide-y divide-gray-200 bg-white">
+            {/* Plan Starter */}
+            <div className="border border-gray-200 rounded-lg shadow-sm divide-y divide-gray-200 bg-white">
               <div className="p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Premium</h3>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">Starter</h3>
                 <p className="mt-4 text-sm text-gray-500">
-                  Acceso completo a todas las funcionalidades del sistema.
+                  Pensado para el inicio, empezá a olvidarte de las tarjetas físicas, digitaliza tus datos.
                 </p>
                 <p className="mt-8">
-                  <span className="text-4xl font-extrabold text-gray-900">$3.500</span>
+                  <span className="text-4xl font-extrabold text-gray-900">$7.500</span>
                   <span className="text-base font-medium text-gray-500">/mes</span>
                 </p>
                 <a
                   href="/register"
                   className="mt-8 block w-full bg-primary-600 border border-transparent rounded-md py-2 text-sm font-semibold text-white text-center hover:bg-primary-700"
                 >
-                  Comenzar con Premium
+                  Comenzar con Starter
                 </a>
               </div>
               <div className="px-6 pt-6 pb-8">
-                <h4 className="text-sm font-medium text-gray-900">Todo lo del plan gratuito, más:</h4>
+                <h4 className="text-sm font-medium text-gray-900">Incluye:</h4>
                 <ul className="mt-6 space-y-4">
                   <li className="flex space-x-3">
                     <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-500">Reportes avanzados y estadísticas</span>
+                    <span className="text-sm text-gray-500">Reportes y estadísticas</span>
                   </li>
                   <li className="flex space-x-3">
                     <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-500">Sistema de notificaciones automáticas</span>
+                    <span className="text-sm text-gray-500">Sistema de notificaciones</span>
                   </li>
                   <li className="flex space-x-3">
                     <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-500">Gestión de múltiples empleados</span>
+                    <span className="text-sm text-gray-500">Usuarios de sistemas (2 usuarios)</span>
                   </li>
                   <li className="flex space-x-3">
                     <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-500">Soporte prioritario</span>
+                    <span className="text-sm text-gray-500">Soporte - mail y Whatsapp</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Acceso a app</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Límite de servicios mensuales (50)</span>
                   </li>
                 </ul>
               </div>
             </div>
+
+            {/* Plan  (Destacado) */}
+            <div className="border-2 border-primary-500 rounded-lg shadow-lg divide-y divide-gray-200 bg-white transform scale-105 relative z-10">
+              <div className="p-6">
+                <span className="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/2 inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-primary-600 text-white">
+                  Recomendado
+                </span>
+
+                
+
+
+                <h3 className="text-lg leading-6 font-medium text-gray-900">Plus</h3>
+                <p className="mt-4 text-sm text-gray-500">
+                  Aumenta la capacidad de tu negocio con más usuarios y servicios mensuales.
+                </p>
+                <p className="mt-8">
+                  <span className="text-4xl font-extrabold text-gray-900">$12.000</span>
+                  <span className="text-base font-medium text-gray-500">/mes</span>
+                </p>
+                <a
+                  href="/register"
+                  className="mt-8 block w-full bg-primary-600 border border-transparent rounded-md py-2 text-sm font-semibold text-white text-center hover:bg-primary-700"
+                >
+                  Elegir plan Plus
+                </a>
+              </div>
+              <div className="px-6 pt-6 pb-8">
+                <h4 className="text-sm font-medium text-gray-900">Incluye:</h4>
+                <ul className="mt-6 space-y-4">
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Reportes y estadísticas</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Sistema de notificaciones</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Usuarios de sistemas (4 usuarios)</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Soporte - mail y Whatsapp (prioritario)</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Acceso a app</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Límite de servicios mensuales (150)</span>
+                  </li>
+                </ul>
+                
+              </div>
+            </div>
+
+            {/* Plan Plus */}
+            <div className="border border-gray-200 rounded-lg shadow-sm divide-y divide-gray-200 bg-white">
+              <div className="p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Premium</h3>
+                <p className="mt-4 text-sm text-gray-500">
+                  Acceso completo a todas las funcionalidades sin limitaciones de servicios.
+                </p>
+                <p className="mt-8">
+                  <span className="text-4xl font-extrabold text-gray-900">$16.500</span>
+                  <span className="text-base font-medium text-gray-500">/mes</span>
+                </p>
+                <a
+                  href="/register"
+                  className="mt-8 block w-full bg-primary-600 border border-transparent rounded-md py-2 text-sm font-semibold text-white text-center hover:bg-primary-700"
+                >
+                  Elegir Premium
+                </a>
+              </div>
+              <div className="px-6 pt-6 pb-8">
+                <h4 className="text-sm font-medium text-gray-900">Incluye:</h4>
+                <ul className="mt-6 space-y-4">
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Reportes y estadísticas</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Sistema de notificaciones</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Usuarios de sistemas (6 usuarios)</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Soporte - mail, Whatsapp, Telefónico - Prioritario</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm text-gray-500">Acceso a app</span>
+                  </li>
+                  <li className="flex space-x-3">
+                    <CheckCircleIcon className="flex-shrink-0 h-5 w-5 text-green-500" aria-hidden="true" />
+                    <span className="text-sm font-bold text-gray-800">Sin límite de servicios mensuales</span>
+                  </li>
+                </ul>
+
+
+              </div>
+            </div>
+
+
+            
           </div>
         </div>
       </div>
@@ -360,5 +476,3 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
-
-

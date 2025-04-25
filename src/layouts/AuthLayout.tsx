@@ -1,6 +1,8 @@
 // src/layouts/AuthLayout.tsx
 import React from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
+import hismaLogo from '../assets/img/hisma_logo_horizontal.png';
+import hismalogo2 from '../assets/img/hisma_logo.png'
 
 const AuthLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -16,7 +18,7 @@ const AuthLayout: React.FC = () => {
                 className="flex-shrink-0 flex items-center cursor-pointer"
                 onClick={() => navigate('/')}
               >
-                <span className="text-xl font-bold">Lubricentro App</span>
+                <img src={hismaLogo} alt="HISMA" className="h-10" />
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -38,15 +40,9 @@ const AuthLayout: React.FC = () => {
           <div className="md:w-1/2 mb-8 md:mb-0 md:pr-8 text-center md:text-left">
             <div className="mb-6 flex justify-center md:justify-start">
               <img 
-                src="/logo-lubricentro.png" 
-                alt="Lubricentro App" 
+                src={hismalogo2} 
+                alt="HISMA" 
                 className="h-32 w-auto"
-                onError={(e) => {
-                  // Fallback a un ícono si la imagen no carga
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null;
-                  target.src = 'https://placehold.co/150x150?text=Lubricentro';
-                }}
               />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-4">

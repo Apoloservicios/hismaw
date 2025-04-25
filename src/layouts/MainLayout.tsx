@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import hismaLogo from '../assets/img/hisma_logo_horizontal.png';
 
 // Heroicons
 import { 
@@ -213,7 +214,7 @@ const MainLayout: React.FC = () => {
           
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center px-4">
-            <span className="text-white text-xl font-bold">Lubricentro App</span>
+            <img src={hismaLogo} alt="HISMA" className="h-8" />
           </div>
           
           {/* Menú */}
@@ -277,8 +278,8 @@ const MainLayout: React.FC = () => {
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64">
           <div className="flex flex-col h-0 flex-1">
-            <div className="flex items-center h-16 flex-shrink-0 px-4 bg-primary-800">
-              <span className="text-white text-xl font-bold">Lubricentro App</span>
+            <div className="flex items-center justify-center h-16 flex-shrink-0 px-4 bg-primary-800">
+              <img src={hismaLogo} alt="HISMA" className="h-8" />
             </div>
             <div className="flex-1 flex flex-col overflow-y-auto bg-primary-700">
               <nav className="flex-1 px-2 py-4 space-y-1">

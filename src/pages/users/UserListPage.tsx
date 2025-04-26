@@ -34,8 +34,19 @@ import {
   CheckIcon, 
   XMarkIcon,
   ArrowPathIcon,
-  EnvelopeIcon 
+  EnvelopeIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
+
+// Importar estos dos elementos al inicio del archivo
+import { SUBSCRIPTION_PLANS } from '../../types/subscription';
+import { canAddMoreUsers } from '../../services/subscriptionService';
+
+import { getLubricentroById } from '../../services/lubricentroService';
+import { Lubricentro } from '../../types';
+
+
+
 
 // Componente para crear nuevo usuario
 const CreateUserModal: React.FC<{
@@ -304,6 +315,36 @@ const UserListPage: React.FC = () => {
   const [processingStatus, setProcessingStatus] = useState(false);
   const [processingCreate, setProcessingCreate] = useState(false);
   
+
+  const [lubricentro, setLubricentro] = useState<Lubricentro | null>(null);
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!userProfile?.lubricentroId) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Cargar usuarios
+        const usersData = await getUsersByLubricentro(userProfile.lubricentroId);
+        setUsers(usersData);
+        setFilteredUsers(usersData);
+        
+        // Cargar información del lubricentro
+        const lubricentroData = await getLubricentroById(userProfile.lubricentroId);
+        setLubricentro(lubricentroData);
+        
+      } catch (err) {
+        console.error('Error al cargar datos:', err);
+        setError('Error al cargar la información necesaria');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [userProfile]);
+
   // Cargar usuarios del lubricentro
   useEffect(() => {
     const fetchUsers = async () => {
@@ -348,11 +389,20 @@ const UserListPage: React.FC = () => {
   
   // Crear nuevo usuario
   const handleCreateUser = async (userData: any) => {
-    if (!userProfile?.lubricentroId) return;
+    if (!userProfile?.lubricentroId || !lubricentro) return;
     
     setProcessingCreate(true);
     try {
-      // Invitar nuevo usuario al lubricentro
+      // Misma verificación directa de límites
+      const activeUsers = users.filter(u => u.estado === 'activo').length;
+      const maxUsers = lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] 
+        ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
+        : 2;
+      
+      if (activeUsers >= maxUsers) {
+        throw new Error(`Has alcanzado el límite de ${maxUsers} usuarios permitidos según tu plan ${lubricentro.subscriptionPlan?.toUpperCase() || 'BÁSICO'}`);
+      }
+      
       await inviteUser(userData.email, {
         nombre: userData.nombre,
         apellido: userData.apellido,
@@ -360,14 +410,19 @@ const UserListPage: React.FC = () => {
         lubricentroId: userProfile.lubricentroId
       });
       
-      // Recargar la lista de usuarios
-      const usersData = await getUsersByLubricentro(userProfile.lubricentroId);
+      // Recargar usuarios y lubricentro
+      const [usersData, lubricentroData] = await Promise.all([
+        getUsersByLubricentro(userProfile.lubricentroId),
+        getLubricentroById(userProfile.lubricentroId)
+      ]);
+      
       setUsers(usersData);
       setFilteredUsers(usersData);
+      setLubricentro(lubricentroData);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al crear usuario:', err);
-      throw new Error('Error al crear el usuario');
+      throw new Error(err.message || 'Error al crear el usuario');
     } finally {
       setProcessingCreate(false);
     }
@@ -437,10 +492,30 @@ const UserListPage: React.FC = () => {
       title="Gestión de Usuarios"
       subtitle="Administra los usuarios de tu lubricentro"
       action={
+        // Para el botón "Nuevo Usuario"
         <Button
           color="primary"
           icon={<PlusIcon className="h-5 w-5" />}
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => {
+            if (!lubricentro) {
+              setError("No se pudo cargar la información del lubricentro");
+              return;
+            }
+            
+            // Verificación directa de límites
+            const activeUsers = users.filter(u => u.estado === 'activo').length;
+            const maxUsers = lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] 
+              ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
+              : 2;
+            
+            if (activeUsers >= maxUsers) {
+              setError(`Has alcanzado el límite de ${maxUsers} usuarios permitidos según tu plan ${lubricentro.subscriptionPlan?.toUpperCase() || 'BÁSICO'}. Contacta al administrador para actualizar tu plan.`);
+              return;
+            }
+            
+            // Si todo está bien, abrir el modal
+            setIsCreateModalOpen(true);
+          }}
         >
           Nuevo Usuario
         </Button>
@@ -563,6 +638,30 @@ const UserListPage: React.FC = () => {
           )}
         </CardBody>
       </Card>
+
+      {/* Añadir esto justo después del Card de la lista de usuarios */}
+      <div className="mt-4 bg-blue-50 p-4 rounded-md">
+        <div className="flex">
+          <UserGroupIcon className="h-5 w-5 text-blue-600 mr-2" />
+          <div>
+            <p className="text-sm font-medium text-blue-800">
+              Límite de usuarios según tu plan
+            </p>
+            <p className="text-sm text-blue-700 mt-1">
+              {lubricentro && (
+                <>
+                  Has utilizado <span className="font-bold">{filteredUsers.filter(u => u.estado === 'activo').length}</span> de{' '}
+                  <span className="font-bold">
+                    {lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] 
+                      ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
+                      : '2'}
+                  </span> usuarios disponibles en tu plan.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
       
       {/* Guía de gestión de usuarios */}
       <Card className="mt-6">

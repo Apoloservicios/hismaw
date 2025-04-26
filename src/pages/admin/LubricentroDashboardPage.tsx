@@ -44,6 +44,7 @@ import {
   CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 
+import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../../types/subscription';
 // Componente para extender período de prueba
 const ExtendTrialModal: React.FC<{
   isOpen: boolean;
@@ -325,6 +326,7 @@ const LubricentroDetailsModal: React.FC<{
               </div>
             </div>
           </div>
+
           
           <div>
             <h3 className="text-sm font-medium text-gray-500 mb-2">Estado y Registro</h3>
@@ -799,6 +801,16 @@ const LubricentroDashboardPage: React.FC = () => {
                         <span className="text-gray-400">N/A</span>
                       )}
                     </TableCell>
+
+                     {/* Nueva columna para el Plan */}
+                      <TableCell>
+                        {lubricentro.subscriptionPlan ? (
+                          <Badge color="info" text={SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.name || 'N/A'} />
+                        ) : (
+                          <span className="text-gray-400">Sin Plan</span>
+                        )}
+                      </TableCell>
+
                     <TableCell>
                       <div className="flex space-x-2">
                         <Button
@@ -863,6 +875,15 @@ const LubricentroDashboardPage: React.FC = () => {
                             </svg>
                           </Button>
                         )}
+                         <Button
+                            size="sm"
+                            color="info"
+                            variant="outline"
+                            onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${lubricentro.id}`)}
+                            title="Gestionar Suscripción"
+                          >
+                            <CreditCardIcon className="h-4 w-4" />
+                          </Button>
                       </div>
                     </TableCell>
                   </TableRow>

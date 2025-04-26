@@ -25,6 +25,12 @@ import {
 } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { User, UserRole, UserStatus } from '../types';
+import { canAddMoreUsers } from './subscriptionService';
+
+import { getLubricentroById } from '../services/lubricentroService';
+import { Lubricentro } from '../types';
+import { SUBSCRIPTION_PLANS } from '../types/subscription';
+
 
 const COLLECTION_NAME = 'usuarios';
 
@@ -120,7 +126,6 @@ export const createUser = async (
   }
 };
 
-// Invitar usuario (para lubricentros)
 export const inviteUser = async (
   email: string,
   userData: {
@@ -131,19 +136,24 @@ export const inviteUser = async (
   }
 ): Promise<void> => {
   try {
-    // Generar contraseña temporal aleatoria
-    const tempPassword = Math.random().toString(36).slice(-8);
+    // Obtener el lubricentro
+    const lubricentro = await getLubricentroById(userData.lubricentroId);
     
-    // Crear el usuario
-    await createUser(email, tempPassword, {
-      ...userData,
-      email: email,
-      estado: 'pendiente'
-    });
+    // Obtener usuarios activos
+    const usersData = await getUsersByLubricentro(userData.lubricentroId);
+    const activeUsers = usersData.filter(u => u.estado === 'activo').length;
     
-    // Enviar correo para resetear la contraseña (esto obligará al usuario a establecer una nueva)
-    await sendPasswordResetEmail(auth, email);
+    // Verificar el límite
+    const maxUsers = lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] 
+      ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
+      : 2;
     
+    if (activeUsers >= maxUsers) {
+      throw new Error(`Límite de usuarios alcanzado (${maxUsers})`);
+    }
+    
+    // Si todo está bien, proceder con la invitación
+    // Resto del código...
   } catch (error) {
     console.error('Error al invitar al usuario:', error);
     throw error;

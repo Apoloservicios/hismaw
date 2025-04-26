@@ -20,7 +20,8 @@ import {
   getLubricentroById, 
   updateLubricentroStatus, 
   extendTrialPeriod,
-  deleteLubricentro
+  deleteLubricentro,
+  updateLubricentro
 } from '../../services/lubricentroService';
 
 import { 
@@ -31,7 +32,13 @@ import {
   getOilChangesStats
 } from '../../services/oilChangeService';
 
+import {
+  updateSubscription,
+  recordPayment
+} from '../../services/subscriptionService';
+
 import { Lubricentro, LubricentroStatus, User, OilChangeStats } from '../../types';
+import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../../types/subscription';
 
 // Íconos
 import { 
@@ -49,7 +56,9 @@ import {
   TrashIcon,
   UserGroupIcon,
   ChartBarIcon,
-  CalendarIcon
+  CalendarIcon,
+  CreditCardIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 // Componente para confirmar eliminación
@@ -239,6 +248,7 @@ const LubricentroDetailPage: React.FC = () => {
   // Estados
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [lubricentro, setLubricentro] = useState<Lubricentro | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<OilChangeStats | null>(null);
@@ -300,6 +310,8 @@ const LubricentroDetailPage: React.FC = () => {
       // Recargar datos
       await loadData();
       
+      setSuccess(`Estado del lubricentro cambiado a ${status}`);
+      
     } catch (err) {
       console.error('Error al cambiar el estado del lubricentro:', err);
       setError('Error al cambiar el estado del lubricentro');
@@ -320,6 +332,7 @@ const LubricentroDetailPage: React.FC = () => {
       await loadData();
       
       setIsExtendTrialModalOpen(false);
+      setSuccess(`Período de prueba extendido por ${days} días`);
     } catch (err) {
       console.error('Error al extender el período de prueba:', err);
       setError('Error al extender el período de prueba');
@@ -342,6 +355,82 @@ const LubricentroDetailPage: React.FC = () => {
       console.error('Error al eliminar el lubricentro:', err);
       setError('Error al eliminar el lubricentro');
       setIsDeleteModalOpen(false);
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Función para cambiar el plan de suscripción
+  const handleChangePlan = async (plan: SubscriptionPlanType) => {
+    if (!id) return;
+    
+    // Solo continuar si hay un cambio de plan
+    if (lubricentro?.subscriptionPlan === plan) {
+      return;
+    }
+    
+    try {
+      setProcessingAction(true);
+      
+      // Determinar el tipo de renovación (mantener el actual o usar mensual por defecto)
+      const renewalType = lubricentro?.subscriptionRenewalType || 'monthly';
+      
+      // Determinar la renovación automática (mantener o activar por defecto)
+      const autoRenewal = lubricentro?.autoRenewal !== false;
+      
+      // Llamar al servicio para actualizar la suscripción
+      await updateSubscription(
+        id,
+        plan,
+        renewalType,
+        autoRenewal,
+        'admin_update',
+        `plan_change_${Date.now()}`
+      );
+      
+      // Recargar datos
+      await loadData();
+      
+      setSuccess(`Plan actualizado a ${SUBSCRIPTION_PLANS[plan].name}`);
+    } catch (err) {
+      console.error('Error al cambiar el plan de suscripción:', err);
+      setError('Error al cambiar el plan de suscripción');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Función para renovar el ciclo de facturación
+  const handleUpdateBillingCycle = async () => {
+    if (!id) return;
+    
+    try {
+      setProcessingAction(true);
+      
+      // Obtener la fecha actual
+      const now = new Date();
+      
+      // Calcular nueva fecha de fin de ciclo
+      const newBillingEnd = new Date(now);
+      const cycleMonths = lubricentro?.subscriptionRenewalType === 'semiannual' ? 6 : 1;
+      newBillingEnd.setMonth(newBillingEnd.getMonth() + cycleMonths);
+      
+      // Actualizar el lubricentro
+      await updateLubricentro(id, {
+        billingCycleEndDate: newBillingEnd,
+        nextPaymentDate: newBillingEnd,
+        paymentStatus: 'paid',
+        lastPaymentDate: now,
+        estado: 'activo' // Asegurar que esté activo
+      } as Partial<Lubricentro>);
+      
+      // Recargar datos
+      await loadData();
+      
+      setSuccess('Ciclo de facturación renovado correctamente');
+    } catch (err) {
+      console.error('Error al renovar ciclo de facturación:', err);
+      setError('Error al renovar el ciclo de facturación');
     } finally {
       setProcessingAction(false);
     }
@@ -422,6 +511,13 @@ const LubricentroDetailPage: React.FC = () => {
             Editar
           </Button>
           <Button
+            color="info"
+            icon={<CreditCardIcon className="h-5 w-5" />}
+            onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${id}`)}
+          >
+            Gestionar Suscripción
+          </Button>
+          <Button
             color="error"
             variant="outline"
             icon={<TrashIcon className="h-5 w-5" />}
@@ -435,6 +531,12 @@ const LubricentroDetailPage: React.FC = () => {
       {error && (
         <Alert type="error" className="mb-6" dismissible onDismiss={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      
+      {success && (
+        <Alert type="success" className="mb-6" dismissible onDismiss={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
       
@@ -504,6 +606,7 @@ const LubricentroDetailPage: React.FC = () => {
           { id: 'info', label: 'Información' },
           { id: 'users', label: 'Usuarios' },
           { id: 'stats', label: 'Estadísticas' },
+          { id: 'suscripcion', label: 'Suscripción' }, // Nueva pestaña
         ]}
         className="mb-6"
       />
@@ -721,6 +824,15 @@ const LubricentroDetailPage: React.FC = () => {
                     Editar Información
                   </Button>
                   
+                  <Button
+                    color="info"
+                    fullWidth
+                    icon={<CreditCardIcon className="h-5 w-5" />}
+                    onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${id}`)}
+                  >
+                    Gestionar Suscripción
+                  </Button>
+                  
                   {lubricentro.estado === 'trial' && (
                     <Button
                       color="warning"
@@ -769,8 +881,6 @@ const LubricentroDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-      
-   
       
       {/* Contenido de la pestaña Usuarios */}
       {activeTab === 'users' && (
@@ -994,6 +1104,208 @@ const LubricentroDetailPage: React.FC = () => {
               )}
             </CardBody>
           </Card>
+        </div>
+      )}
+      
+      {/* Contenido de la pestaña Suscripción */}
+      {activeTab === 'suscripcion' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Detalles de la suscripción actual */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader title="Detalles de la Suscripción" />
+              <CardBody>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Plan Actual
+                    </label>
+                    <div className="mt-1 text-lg font-medium text-gray-900">
+                      {lubricentro.subscriptionPlan
+                        ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.name || 'Plan desconocido'
+                        : 'Sin plan asignado'}
+                    </div>
+                    {lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] && (
+                      <p className="mt-1 text-sm text-gray-500">
+                        {SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Estado
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      {lubricentro.estado === 'activo' ? (
+                        <Badge color="success" text="Activo" />
+                      ) : lubricentro.estado === 'trial' ? (
+                        <Badge color="warning" text="Prueba" />
+                      ) : (
+                        <Badge color="error" text="Inactivo" />
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {lubricentro.estado === 'trial' && lubricentro.trialEndDate ? (
+                        `Período de prueba hasta: ${formatDate(lubricentro.trialEndDate)}`
+                      ) : lubricentro.subscriptionEndDate ? (
+                        `Suscripción válida hasta: ${formatDate(lubricentro.subscriptionEndDate)}`
+                      ) : (
+                        'Sin período activo'
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Asignar Plan de Suscripción</h3>
+                  
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {Object.entries(SUBSCRIPTION_PLANS).map(([planId, planData]) => (
+                      <div 
+                        key={planId}
+                        className={`border rounded-lg p-4 cursor-pointer transition-colors
+                          ${lubricentro.subscriptionPlan === planId ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                        onClick={() => {
+                          handleChangePlan(planId as SubscriptionPlanType);
+                        }}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">{planData.name}</h3>
+                            <p className="text-sm text-gray-500">${planData.price.toLocaleString()} /mes</p>
+                          </div>
+                          {lubricentro.subscriptionPlan === planId && (
+                            <div className="rounded-full bg-primary-500 p-1">
+                              <CheckIcon className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="mt-2">
+                          <div className="flex items-center mb-1">
+                            <UserGroupIcon className="h-4 w-4 text-gray-400 mr-1" />
+                            <span className="text-xs text-gray-600">Hasta {planData.maxUsers} usuarios</span>
+                          </div>
+                          <div className="flex items-center">
+                            <ChartBarIcon className="h-4 w-4 text-gray-400 mr-1" />
+                            <span className="text-xs text-gray-600">
+                              {planData.maxMonthlyServices === null 
+                                ? 'Servicios ilimitados' 
+                                : `${planData.maxMonthlyServices} servicios/mes`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Panel lateral con opciones */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader title="Acciones de Suscripción" />
+              <CardBody>
+                <div className="space-y-3">
+                  <Button
+                    color="primary"
+                    fullWidth
+                    icon={<CreditCardIcon className="h-5 w-5" />}
+                    onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${id}`)}
+                  >
+                    Gestionar Suscripción
+                  </Button>
+                  
+                  <Button
+                    color="success"
+                    fullWidth
+                    icon={<ArrowPathIcon className="h-5 w-5" />}
+                    onClick={() => handleUpdateBillingCycle()}
+                  >
+                    Renovar Ciclo de Facturación
+                  </Button>
+                  
+                  {lubricentro.estado === 'trial' && (
+                    <Button
+                      color="warning"
+                      fullWidth
+                      icon={<ClockIcon className="h-5 w-5" />}
+                      onClick={() => setIsExtendTrialModalOpen(true)}
+                    >
+                      Extender Prueba
+                    </Button>
+                  )}
+                  
+                  {lubricentro.estado !== 'activo' ? (
+                    <Button
+                      color="success"
+                      variant="outline"
+                      fullWidth
+                      icon={<CheckIcon className="h-5 w-5" />}
+                      onClick={() => handleChangeStatus('activo')}
+                    >
+                      Activar Suscripción
+                    </Button>
+                  ) : (
+                    <Button
+                      color="error"
+                      variant="outline"
+                      fullWidth
+                      icon={<XMarkIcon className="h-5 w-5" />}
+                      onClick={() => handleChangeStatus('inactivo')}
+                    >
+                      Desactivar Suscripción
+                    </Button>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+            
+            {/* Información de uso */}
+            <Card className="mt-6">
+              <CardHeader title="Límites del Plan" />
+              <CardBody>
+                {lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Usuarios
+                      </label>
+                      <div className="mt-1 flex items-center">
+                        <span className="text-2xl font-semibold text-gray-900">
+                          {lubricentro.activeUserCount || 0}
+                        </span>
+                        <span className="ml-2 text-gray-500">
+                          / {SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Servicios Mensuales
+                      </label>
+                      <div className="mt-1 flex items-center">
+                        <span className="text-2xl font-semibold text-gray-900">
+                          {lubricentro.servicesUsedThisMonth || 0}
+                        </span>
+                        <span className="ml-2 text-gray-500">
+                          {SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices === null 
+                            ? '/ ∞' 
+                            : `/ ${SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No hay plan asignado.</p>
+                )}
+              </CardBody>
+            </Card>
+          </div>
         </div>
       )}
       

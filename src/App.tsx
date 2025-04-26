@@ -50,6 +50,8 @@ import PrivateRoute from './components/common/PrivateRoute';
 
 import SuperAdminReportPage from './pages/admin/SuperAdminReportPage';
 
+import LubricentroSubscriptionPage from './pages/admin/LubricentroSubscriptionPage';
+
 // Create a client for React Query
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -243,7 +245,22 @@ const App: React.FC = () => {
                   </PrivateRoute>
                 } 
               />
+
+               {/* Nueva ruta para gestión de suscripciones */}
+            <Route 
+              path="/superadmin/lubricentros/suscripcion/:id" 
+              element={
+                <PrivateRoute requiredRoles={['superadmin']}>
+                  <LubricentroSubscriptionPage />
+                </PrivateRoute>
+              } 
+            />
+
+
+
             </Route>
+
+           
             
             {/* Redirigir rutas desconocidas */}
             <Route path="*" element={<Navigate to="/" replace />} />

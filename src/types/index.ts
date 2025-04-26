@@ -16,11 +16,13 @@ export interface User {
   createdAt: Date;
   photoURL?: string;
   updatedAt?: Date;
- 
 }
 
 // Tipos de Lubricentro
 export type LubricentroStatus = 'activo' | 'inactivo' | 'trial';
+
+// Importar SubscriptionPlanType para usarlo en Lubricentro
+import { SubscriptionPlanType } from './subscription';
 
 export interface Lubricentro {
   id: string;
@@ -35,8 +37,8 @@ export interface Lubricentro {
     lng?: number;
     address?: string;
   };
-  logoUrl?: string;      // URL de la imagen en Cloudinary
-  logoBase64?: string;   // Versión base64 del logo para PDFs
+  logoUrl?: string;      
+  logoBase64?: string;   
   ownerId: string;
   estado: LubricentroStatus;
   subscriptionId?: string;
@@ -44,21 +46,39 @@ export interface Lubricentro {
   createdAt: Date;
   trialEndDate?: Date;
   updatedAt?: Date;
+  
+  // Campos para suscripción
+  subscriptionPlan?: SubscriptionPlanType;
+  subscriptionStartDate?: Date;
+  subscriptionEndDate?: Date;
+  subscriptionRenewalType?: 'monthly' | 'semiannual';
+  contractEndDate?: Date;         
+  billingCycleEndDate?: Date;     
+  lastPaymentDate?: Date;         
+  nextPaymentDate?: Date;         
+  paymentStatus?: 'paid' | 'pending' | 'overdue';
+  servicesUsedThisMonth?: number; 
+  activeUserCount?: number;       
+  servicesUsedHistory?: {         
+    [month: string]: number;      
+  };
+  paymentHistory?: {              
+    date: Date;
+    amount: number;
+    method: string;
+    reference: string;
+  }[];
+  autoRenewal?: boolean;         
 }
 
-
-
-
-
-
-// Tipo de suscripción
-export type SubscriptionPlan = 'trial' | 'basic' | 'premium';
+// Cambiar esto para evitar conflicto con el nombre
+export type OldSubscriptionPlan = 'trial' | 'basic' | 'premium';
 export type SubscriptionStatus = 'active' | 'expired' | 'canceled';
 
 export interface Subscription {
   id: string;
   lubricentroId: string;
-  plan: SubscriptionPlan;
+  plan: OldSubscriptionPlan;
   startDate: Date;
   endDate: Date;
   status: SubscriptionStatus;
@@ -73,30 +93,30 @@ export interface OilChange {
   id: string;
   lubricentroId: string;
   fecha: Date;
-  nroCambio: string; // formato: prefijo-numero (ej: AP-00001)
+  nroCambio: string;
   nombreCliente: string;
   celular?: string;
   lubricentroNombre?: string;
   
   // Datos del vehículo
-  dominioVehiculo: string; // Patente
+  dominioVehiculo: string;
   marcaVehiculo: string;
   modeloVehiculo: string;
-  tipoVehiculo: string; // Ej: Automóvil, Camioneta, etc.
+  tipoVehiculo: string;
   añoVehiculo?: number;
   kmActuales: number;
-  kmProximo: number; // Calculado: kmActuales + 10000 mínimo
-  perioricidad_servicio: number; // En meses
+  kmProximo: number;
+  perioricidad_servicio: number;
   fechaProximoCambio: Date;
   
   // Datos del servicio
   fechaServicio: Date;
   marcaAceite: string;
   tipoAceite: string;
-  sae: string; // Viscosidad del aceite
+  sae: string;
   cantidadAceite: number;
   
-  // Filtros y extras (check y notas)
+  // Filtros y extras
   filtroAceite: boolean;
   filtroAceiteNota?: string;
   filtroAire: boolean;
@@ -141,3 +161,7 @@ export interface OperatorStats {
   operatorName: string;
   count: number;
 }
+
+// Re-exportar tipos de suscripción
+export type { SubscriptionPlanType } from './subscription';
+export { SUBSCRIPTION_PLANS } from './subscription';

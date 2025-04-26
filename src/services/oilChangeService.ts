@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { OilChange, OilChangeStats } from '../types';
+import { incrementServiceCount } from './subscriptionService';
 
 const COLLECTION_NAME = 'cambiosAceite';
 
@@ -243,6 +244,13 @@ export const getOilChangesByVehicle = async (dominioVehiculo: string): Promise<O
 // Crear cambio de aceite
 export const createOilChange = async (data: Omit<OilChange, 'id' | 'createdAt'>): Promise<string> => {
   try {
+    // Verificar límites de servicio según el plan de suscripción
+    const canCreateService = await incrementServiceCount(data.lubricentroId);
+    
+    if (!canCreateService) {
+      throw new Error('Has alcanzado el límite mensual de servicios según tu plan de suscripción. Contacta al administrador para actualizar tu plan.');
+    }
+    
     // Asegurarse de que el dominio del vehículo esté en mayúsculas
     const dominioVehiculo = data.dominioVehiculo.toUpperCase();
     

@@ -1,4 +1,6 @@
 // src/types/index.ts
+// Importar SubscriptionPlanType para usarlo en Lubricentro
+import { SubscriptionPlanType } from './subscription';
 
 // Tipos de usuario
 export type UserRole = 'superadmin' | 'admin' | 'user';
@@ -21,8 +23,7 @@ export interface User {
 // Tipos de Lubricentro
 export type LubricentroStatus = 'activo' | 'inactivo' | 'trial';
 
-// Importar SubscriptionPlanType para usarlo en Lubricentro
-import { SubscriptionPlanType } from './subscription';
+
 
 export interface Lubricentro {
   id: string;

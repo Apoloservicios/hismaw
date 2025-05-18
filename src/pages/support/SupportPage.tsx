@@ -179,7 +179,7 @@ const SupportPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <h4 className="text-sm font-medium text-gray-900">Email</h4>
-                    <p className="text-sm text-gray-500">soporte@lubricentro-app.com</p>
+                    <p className="text-sm text-gray-500">info@hisma.com.ar</p>
                     <p className="text-xs text-gray-400 mt-1">
                       Respondemos en un plazo de 24-48 horas hábiles
                     </p>
@@ -192,25 +192,14 @@ const SupportPage: React.FC = () => {
                   </div>
                   <div className="ml-3">
                     <h4 className="text-sm font-medium text-gray-900">Teléfono</h4>
-                    <p className="text-sm text-gray-500">+54 (11) 1234-5678</p>
+                    <p className="text-sm text-gray-500">+54 2604515854</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Lun-Vie: 9am a 6pm (GMT-3)
+                      Lun-Vie: 8am a 12pm
                     </p>
                   </div>
                 </div>
                 
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <ChatBubbleLeftRightIcon className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-3">
-                    <h4 className="text-sm font-medium text-gray-900">Chat en vivo</h4>
-                    <p className="text-sm text-gray-500">Disponible para clientes premium</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Atención inmediata en horario laboral
-                    </p>
-                  </div>
-                </div>
+                
               </div>
             </CardBody>
           </Card>
@@ -305,35 +294,7 @@ const SupportPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Membresía expirada (condicional) */}
-      {userProfile?.lubricentroId && userProfile.role !== 'superadmin' && (
-        <Card className="mt-6 bg-yellow-50 border-yellow-200">
-          <CardHeader
-            title="Información de Membresía"
-            subtitle="Estado actual de tu suscripción"
-          />
-          <CardBody>
-            <div className="flex flex-col sm:flex-row items-start">
-              <div className="flex-grow">
-                <h3 className="text-lg font-medium text-gray-900">Período de prueba</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Tu cuenta se encuentra actualmente en un período de prueba gratuito. 
-                  Para continuar utilizando todas las funcionalidades del sistema después de este período, 
-                  deberás activar un plan de pago.
-                </p>
-              </div>
-              <div className="mt-4 sm:mt-0">
-                <Button
-                  color="primary"
-                  onClick={() => window.open('mailto:ventas@lubricentro-app.com', '_blank')}
-                >
-                  Activar Plan Premium
-                </Button>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-      )}
+     
     </PageContainer>
   );
 };

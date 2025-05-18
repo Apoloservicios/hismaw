@@ -92,17 +92,17 @@ const OilChangeDetailPage: React.FC = () => {
   });
   
   const handleGeneratePDF = () => {
-    if (!oilChange) return;
-    
-    try {
-      // Usar el método directo que no depende de html2canvas
-      enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
-      console.log("PDF generado exitosamente con el método directo");
-    } catch (err) {
-      console.error('Error al generar PDF:', err);
-      setError('Error al generar el PDF. Por favor, intente nuevamente.');
-    }
-  };
+      if (!oilChange) return;
+      
+      try {
+        // Usar el método directo que no depende de html2canvas
+        enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
+        console.log("PDF generado exitosamente con el método directo");
+      } catch (err) {
+        console.error('Error al generar PDF:', err);
+        setError('Error al generar el PDF. Por favor, intente nuevamente.');
+      }
+    };
   
   // Manejar la eliminación
   const handleDelete = async () => {
@@ -158,6 +158,7 @@ const OilChangeDetailPage: React.FC = () => {
         <Alert type="error" className="mb-4">
           {error || 'No se pudo cargar la información del cambio de aceite.'}
         </Alert>
+
         <Button
           color="primary"
           onClick={() => navigate('/cambios-aceite')}
@@ -165,32 +166,33 @@ const OilChangeDetailPage: React.FC = () => {
         >
           Volver a la lista
         </Button>
+
       </PageContainer>
     );
   }
   
   return (
     <PageContainer
-      title={`Cambio de Aceite - ${oilChange.nroCambio}`}
-      subtitle={`Cliente: ${oilChange.nombreCliente} - Vehículo: ${oilChange.marcaVehiculo} ${oilChange.modeloVehiculo}`}
-      action={
-        <div className="flex space-x-2">
-          <Button
-            color="primary"
-            icon={<PrinterIcon className="h-5 w-5" />}
-            onClick={handleGeneratePDF}
-          >
-            Generar PDF
-          </Button>
-          <Button
-            color="secondary"
-            icon={<ShareIcon className="h-5 w-5" />}
-            onClick={shareViaWhatsApp}
-          >
-            Compartir
-          </Button>
-        </div>
-      }
+    title={`Cambio de Aceite - ${oilChange.nroCambio}`}
+    subtitle={`Cliente: ${oilChange.nombreCliente} - Vehículo: ${oilChange.marcaVehiculo} ${oilChange.modeloVehiculo}`}
+    action={
+      <div className="flex space-x-2">
+        <Button
+          color="primary"
+          icon={<PrinterIcon className="h-5 w-5" />}
+          onClick={handleGeneratePDF}
+        >
+          Generar PDF
+        </Button>
+        <Button
+          color="secondary"
+          icon={<ShareIcon className="h-5 w-5" />}
+          onClick={shareViaWhatsApp}
+        >
+          Compartir
+        </Button>
+      </div>
+    }
     >
       {error && (
         <Alert type="error" className="mb-6" dismissible onDismiss={() => setError(null)}>

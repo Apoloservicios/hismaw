@@ -155,12 +155,12 @@ const MainLayout: React.FC = () => {
         path: '/soporte',
         divider: false
       },
-      { 
-        text: 'Consulta Historial', 
-        icon: <MagnifyingGlassIcon className="w-5 h-5" />, 
-        path: '/consulta-historial',
-        divider: false
-      },
+      // { 
+      //   text: 'Consulta Historial', 
+      //   icon: <MagnifyingGlassIcon className="w-5 h-5" />, 
+      //   path: '/consulta-historial',
+      //   divider: false
+      // },
     );
     
     return items;

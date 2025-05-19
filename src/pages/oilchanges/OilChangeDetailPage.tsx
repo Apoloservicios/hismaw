@@ -7,8 +7,10 @@ import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner, Badg
 import { getOilChangeById, deleteOilChange } from '../../services/oilChangeService';
 import { getLubricentroById } from '../../services/lubricentroService';
 import { OilChange, Lubricentro } from '../../types';
+
+import enhancedPdfService from '../../services/enhancedPdfService';
 import EnhancedPrintComponent from '../../components/print/EnhancedPrintComponent';
-import { enhancedPdfService } from '../../services/enhancedPdfService';
+
 
 
 // Iconos
@@ -91,18 +93,18 @@ const OilChangeDetailPage: React.FC = () => {
     }
   });
   
-  const handleGeneratePDF = () => {
-      if (!oilChange) return;
-      
-      try {
-        // Usar el método directo que no depende de html2canvas
-        enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
-        console.log("PDF generado exitosamente con el método directo");
-      } catch (err) {
-        console.error('Error al generar PDF:', err);
-        setError('Error al generar el PDF. Por favor, intente nuevamente.');
-      }
-    };
+const handleGeneratePDF = () => {
+  if (!oilChange) return;
+  
+  try {
+    enhancedPdfService.generateDirectPDF(oilChange, lubricentro);
+    console.log("PDF generado exitosamente");
+  } catch (err) {
+    console.error('Error al generar PDF:', err);
+    setError('Error al generar el PDF. Por favor, intente nuevamente.');
+  }
+};
+
   
   // Manejar la eliminación
   const handleDelete = async () => {
@@ -122,18 +124,16 @@ const OilChangeDetailPage: React.FC = () => {
   };
   
   // Compartir por WhatsApp usando el formato mejorado
-  const shareViaWhatsApp = () => {
-    if (!oilChange || !lubricentro) return;
-    
-    // Usar el servicio mejorado para generar el mensaje
-    const { whatsappUrl, whatsappUrlWithPhone } = enhancedPdfService.generateWhatsAppMessage(
-      oilChange,
-      lubricentro.fantasyName
-    );
-    
-    // Abrir en nueva ventana - priorizar URL con teléfono si está disponible
-    window.open(whatsappUrlWithPhone || whatsappUrl, '_blank');
-  };
+const shareViaWhatsApp = () => {
+  if (!oilChange || !lubricentro) return;
+  
+  const { whatsappUrl, whatsappUrlWithPhone } = enhancedPdfService.generateWhatsAppMessage(
+    oilChange,
+    lubricentro.fantasyName || 'Lubricentro'
+  );
+  
+  window.open(whatsappUrlWithPhone || whatsappUrl, '_blank');
+};
   
   // Formatear fecha
   const formatDate = (date: Date): string => {

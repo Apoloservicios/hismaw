@@ -103,19 +103,10 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
                   {lubricentro?.fantasyName?.substring(0, 2).toUpperCase() || 'LB'}
                 </div>
               )}
-              
-              {/* Placeholder para QR (en una implementación real se generaría dinámicamente) */}
-              <div style={{
-                width: '70px',
-                height: '70px',
-                marginTop: '10px',
-                backgroundColor: '#eee',
-                marginLeft: 'auto'
-              }}></div>
             </div>
         </div>
         
-        {/* Cabecera del comprobante */}
+        {/* Título del documento */}
         <div style={{
           backgroundColor: primaryColor,
           color: 'white',
@@ -133,162 +124,100 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
           </p>
         </div>
         
-        {/* Dominio/Patente destacado */}
-        <div style={{
-          backgroundColor: lightBgColor,
-          padding: '10px',
-          textAlign: 'center',
-          marginBottom: '20px',
-          borderRadius: '4px',
-          fontSize: '24px',
-          fontWeight: 'bold'
-        }}>
-          {oilChange.dominioVehiculo}
-        </div>
-        
-        {/* Información en dos columnas */}
+        {/* Información principal */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-          {/* Detalles del vehículo */}
+          {/* Detalles del cliente */}
           <div style={{ flex: 1 }}>
             <div style={{
               backgroundColor: primaryColor,
               color: 'white',
               padding: '8px',
-              borderTopLeftRadius: '4px',
-              borderTopRightRadius: '4px',
+              borderRadius: '4px 4px 0 0',
               fontWeight: 'bold'
             }}>
-              Detalles del Vehículo
+              Datos del Cliente
             </div>
-            
             <div style={{
               border: '1px solid #ddd',
               borderTop: 'none',
               padding: '15px',
-              borderBottomLeftRadius: '4px',
-              borderBottomRightRadius: '4px'
+              borderRadius: '0 0 4px 4px'
             }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666', width: '40%' }}>Marca</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>{oilChange.marcaVehiculo}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Modelo</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>{oilChange.modeloVehiculo}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Año</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {oilChange.añoVehiculo || 'No especificado'}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Tipo</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>{oilChange.tipoVehiculo}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Kilometraje</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {oilChange.kmActuales.toLocaleString()} km
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <p><strong>Cliente:</strong> {oilChange.nombreCliente}</p>
+              {oilChange.celular && <p><strong>Teléfono:</strong> {oilChange.celular}</p>}
+              <p><strong>Operario:</strong> {oilChange.nombreOperario}</p>
             </div>
           </div>
           
-          {/* Datos del servicio */}
+          {/* Detalles del vehículo */}
           <div style={{ flex: 1 }}>
             <div style={{
               backgroundColor: secondaryColor,
               color: 'white',
               padding: '8px',
-              borderTopLeftRadius: '4px',
-              borderTopRightRadius: '4px',
+              borderRadius: '4px 4px 0 0',
               fontWeight: 'bold'
             }}>
-              Datos del Servicio
+              Datos del Vehículo
             </div>
-            
             <div style={{
               border: '1px solid #ddd',
               borderTop: 'none',
               padding: '15px',
-              borderBottomLeftRadius: '4px',
-              borderBottomRightRadius: '4px'
+              borderRadius: '0 0 4px 4px'
             }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666', width: '40%' }}>Cliente</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>{oilChange.nombreCliente}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Fecha</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {formatDate(oilChange.fechaServicio)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Operario</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>{oilChange.nombreOperario}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Aceite</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {`${oilChange.marcaAceite} ${oilChange.tipoAceite} ${oilChange.sae}`}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Cantidad</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {oilChange.cantidadAceite} litros
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Próx. Cambio</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {formatDate(oilChange.fechaProximoCambio)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '4px', color: '#666' }}>Próx. Km</td>
-                    <td style={{ padding: '4px', fontWeight: 'bold' }}>
-                      {oilChange.kmProximo.toLocaleString()} km
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <p><strong>Dominio:</strong> {oilChange.dominioVehiculo}</p>
+              <p><strong>Marca/Modelo:</strong> {oilChange.marcaVehiculo} {oilChange.modeloVehiculo}</p>
+              <p><strong>Tipo:</strong> {oilChange.tipoVehiculo}</p>
+              {oilChange.añoVehiculo && <p><strong>Año:</strong> {oilChange.añoVehiculo}</p>}
+              <p><strong>Kilometraje:</strong> {oilChange.kmActuales.toLocaleString()} km</p>
             </div>
           </div>
         </div>
         
-        {/* Filtros y servicios adicionales */}
+        {/* Detalles del aceite */}
         <div style={{ marginBottom: '20px' }}>
           <div style={{
             backgroundColor: accentColor,
             color: 'white',
             padding: '8px',
-            borderTopLeftRadius: '4px',
-            borderTopRightRadius: '4px',
+            borderRadius: '4px 4px 0 0',
             fontWeight: 'bold'
           }}>
-            Filtros y Servicios Adicionales
+            Datos del Servicio
           </div>
-          
           <div style={{
             border: '1px solid #ddd',
             borderTop: 'none',
             padding: '15px',
-            borderBottomLeftRadius: '4px',
-            borderBottomRightRadius: '4px',
+            borderRadius: '0 0 4px 4px'
+          }}>
+            <p><strong>Aceite:</strong> {oilChange.marcaAceite} {oilChange.tipoAceite} {oilChange.sae}</p>
+            <p><strong>Cantidad:</strong> {oilChange.cantidadAceite} litros</p>
+            <p><strong>Próximo Cambio:</strong> {formatDate(oilChange.fechaProximoCambio)} o {oilChange.kmProximo.toLocaleString()} km</p>
+          </div>
+        </div>
+        
+        {/* Servicios adicionales */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{
+            backgroundColor: primaryColor,
+            color: 'white',
+            padding: '8px',
+            borderRadius: '4px 4px 0 0',
+            fontWeight: 'bold'
+          }}>
+            Filtros y Servicios Adicionales
+          </div>
+          <div style={{
+            border: '1px solid #ddd',
+            borderTop: 'none',
+            padding: '15px',
+            borderRadius: '0 0 4px 4px',
             display: 'flex',
             flexWrap: 'wrap',
             gap: '10px'
           }}>
-            {/* Mostrar servicios como "badges" o etiquetas */}
             {oilChange.filtroAceite && (
               <div style={{
                 backgroundColor: '#e6f7ff',
@@ -297,7 +226,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
                 padding: '5px 10px',
                 fontSize: '14px'
               }}>
-                <span style={{ fontWeight: 'bold' }}>Filtro de Aceite</span>
+                <span style={{ fontWeight: 'bold' }}>Filtro de aceite</span>
                 {oilChange.filtroAceiteNota && <span>: {oilChange.filtroAceiteNota}</span>}
               </div>
             )}
@@ -310,7 +239,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
                 padding: '5px 10px',
                 fontSize: '14px'
               }}>
-                <span style={{ fontWeight: 'bold' }}>Filtro de Aire</span>
+                <span style={{ fontWeight: 'bold' }}>Filtro de aire</span>
                 {oilChange.filtroAireNota && <span>: {oilChange.filtroAireNota}</span>}
               </div>
             )}
@@ -323,7 +252,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
                 padding: '5px 10px',
                 fontSize: '14px'
               }}>
-                <span style={{ fontWeight: 'bold' }}>Filtro de Habitáculo</span>
+                <span style={{ fontWeight: 'bold' }}>Filtro de habitáculo</span>
                 {oilChange.filtroHabitaculoNota && <span>: {oilChange.filtroHabitaculoNota}</span>}
               </div>
             )}
@@ -336,7 +265,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
                 padding: '5px 10px',
                 fontSize: '14px'
               }}>
-                <span style={{ fontWeight: 'bold' }}>Filtro de Combustible</span>
+                <span style={{ fontWeight: 'bold' }}>Filtro de combustible</span>
                 {oilChange.filtroCombustibleNota && <span>: {oilChange.filtroCombustibleNota}</span>}
               </div>
             )}
@@ -406,7 +335,6 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
               </div>
             )}
             
-            {/* Mostrar mensaje si no hay servicios adicionales */}
             {!oilChange.filtroAceite && !oilChange.filtroAire && 
              !oilChange.filtroHabitaculo && !oilChange.filtroCombustible && 
              !oilChange.aditivo && !oilChange.refrigerante && 
@@ -416,26 +344,23 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
           </div>
         </div>
         
-        {/* Observaciones si existen */}
+        {/* Observaciones */}
         {oilChange.observaciones && (
           <div style={{ marginBottom: '20px' }}>
             <div style={{
               backgroundColor: '#6c757d',
               color: 'white',
               padding: '8px',
-              borderTopLeftRadius: '4px',
-              borderTopRightRadius: '4px',
+              borderRadius: '4px 4px 0 0',
               fontWeight: 'bold'
             }}>
               Observaciones
             </div>
-            
             <div style={{
               border: '1px solid #ddd',
               borderTop: 'none',
               padding: '15px',
-              borderBottomLeftRadius: '4px',
-              borderBottomRightRadius: '4px',
+              borderRadius: '0 0 4px 4px',
               backgroundColor: lightBgColor
             }}>
               <p style={{ margin: 0, whiteSpace: 'pre-line' }}>{oilChange.observaciones}</p>
@@ -443,7 +368,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
           </div>
         )}
         
-        {/* Espacio para firma */}
+        {/* Firmas */}
         <div style={{ 
           marginTop: '40px', 
           display: 'flex', 
@@ -456,7 +381,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
             textAlign: 'center',
             fontSize: '14px'
           }}>
-            Firma del Cliente
+            Firma del Operario
           </div>
           
           <div style={{
@@ -466,28 +391,11 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
             textAlign: 'center',
             fontSize: '14px'
           }}>
-            Firma del Operario
+            Firma del Cliente
           </div>
         </div>
         
         {/* Pie de página */}
-        <div style={{
-          marginTop: '30px',
-          padding: '10px',
-          border: '1px dashed #ddd',
-          borderRadius: '4px',
-          backgroundColor: lightBgColor,
-          fontSize: '12px',
-          textAlign: 'center',
-          color: '#666'
-        }}>
-          <p style={{ margin: 0 }}>Este documento no tiene validez como factura.</p>
-          <p style={{ margin: '5px 0 0 0' }}>
-            <span style={{ fontWeight: 'bold' }}>Próximo cambio:</span> a los {oilChange.kmProximo.toLocaleString()} km o el {formatDate(oilChange.fechaProximoCambio)}, lo que ocurra primero.
-          </p>
-        </div>
-        
-        {/* Footer con información del lubricentro */}
         <div style={{
           marginTop: '30px',
           borderTop: `2px solid ${primaryColor}`,
@@ -501,7 +409,7 @@ const EnhancedPrintComponent = forwardRef<HTMLDivElement, EnhancedPrintComponent
             {lubricentro ? ` ${lubricentro.domicilio} - Tel: ${lubricentro.phone}` : ''}
           </p>
           <p style={{ margin: '3px 0 0 0' }}>
-            &copy; {new Date().getFullYear()} - Todos los derechos reservados
+            © {new Date().getFullYear()} - Todos los derechos reservados
           </p>
         </div>
       </div>

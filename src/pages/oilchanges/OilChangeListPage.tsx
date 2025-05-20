@@ -8,9 +8,9 @@ import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner } fro
 import { getOilChangesByLubricentro, searchOilChanges, getOilChangeById } from '../../services/oilChangeService';
 import { getLubricentroById } from '../../services/lubricentroService';
 import { OilChange, Lubricentro } from '../../types';
-import pdfService from '../../services/pdfService';
+
 import EnhancedPrintComponent from '../../components/print/EnhancedPrintComponent';
-import { enhancedPdfService } from '../../services/enhancedPdfService';
+import  enhancedPdfService  from '../../services/enhancedPdfService';
 import { 
   QueryDocumentSnapshot,
   DocumentData

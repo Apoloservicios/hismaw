@@ -114,7 +114,6 @@ const OilChangeFormPage: React.FC = () => {
   
   // Estado para controlar el paso actual del formulario
   const [currentStep, setCurrentStep] = useState<FormStep>('cliente');
-  
   // Cargar datos iniciales
   useEffect(() => {
     const fetchData = async () => {
@@ -249,8 +248,6 @@ const OilChangeFormPage: React.FC = () => {
       if (!formData.nombreCliente?.trim()) {
         errors.nombreCliente = 'El nombre del cliente es obligatorio';
       }
-      
-      // Podemos añadir más validaciones específicas para este paso...
     }
     else if (currentStep === 'vehiculo') {
       if (!formData.dominioVehiculo?.trim()) {
@@ -303,7 +300,6 @@ const OilChangeFormPage: React.FC = () => {
     // Paso válido si no hay errores
     return Object.keys(errors).length === 0;
   };
-  
   // Validar todo el formulario antes de enviar
   const validateFullForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -465,7 +461,6 @@ const OilChangeFormPage: React.FC = () => {
       year: 'numeric'
     });
   };
-  
   if (loading) {
     return (
       <div className="flex justify-center items-center h-80">
@@ -566,7 +561,6 @@ const OilChangeFormPage: React.FC = () => {
             <div className={currentStep === 'resumen' ? 'font-bold text-primary-600' : ''}>Resumen</div>
           </div>
         </div>
-        
         {/* Paso 1: Datos del cliente */}
         {currentStep === 'cliente' && (
           <Card>
@@ -582,6 +576,7 @@ const OilChangeFormPage: React.FC = () => {
                   required
                   icon={<UserIcon className="h-5 w-5 text-gray-400" />}
                   error={validationErrors.nombreCliente}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -591,6 +586,7 @@ const OilChangeFormPage: React.FC = () => {
                   onChange={handleChange}
                   placeholder="Número de contacto"
                   icon={<PhoneIcon className="h-5 w-5 text-gray-400" />}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -601,6 +597,7 @@ const OilChangeFormPage: React.FC = () => {
                   onChange={handleChange}
                   required
                   icon={<CalendarIcon className="h-5 w-5 text-gray-400" />}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -611,12 +608,12 @@ const OilChangeFormPage: React.FC = () => {
                   placeholder="Nombre del operario"
                   required
                   icon={<WrenchIcon className="h-5 w-5 text-gray-400" />}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
               </div>
             </CardBody>
           </Card>
         )}
-        
         {/* Paso 2: Datos del vehículo */}
         {currentStep === 'vehiculo' && (
           <Card>
@@ -633,6 +630,7 @@ const OilChangeFormPage: React.FC = () => {
                   icon={<TruckIcon className="h-5 w-5 text-gray-400" />}
                   error={validationErrors.dominioVehiculo}
                   helperText="Formatos válidos: AA123BB, AAA123, A123BCD"
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Select
@@ -642,6 +640,7 @@ const OilChangeFormPage: React.FC = () => {
                   onChange={handleChange}
                   options={tiposVehiculo.map(tipo => ({ value: tipo, label: tipo }))}
                   required
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <AutocompleteInput
@@ -653,6 +652,7 @@ const OilChangeFormPage: React.FC = () => {
                   placeholder="Marca del vehículo"
                   required
                   error={validationErrors.marcaVehiculo}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -663,6 +663,7 @@ const OilChangeFormPage: React.FC = () => {
                   placeholder="Modelo del vehículo"
                   required
                   error={validationErrors.modeloVehiculo}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -674,6 +675,7 @@ const OilChangeFormPage: React.FC = () => {
                   placeholder="Año del vehículo"
                   helperText={`Entre 1900 y ${new Date().getFullYear() + 1}`}
                   error={validationErrors.añoVehiculo}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -686,6 +688,7 @@ const OilChangeFormPage: React.FC = () => {
                   required
                   error={validationErrors.kmActuales}
                   helperText="Ingrese un valor mayor o igual a 0"
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -696,6 +699,7 @@ const OilChangeFormPage: React.FC = () => {
                   onChange={handleChange}
                   required
                   helperText="Entre 1 y 24 meses"
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
                 
                 <Input
@@ -707,12 +711,12 @@ const OilChangeFormPage: React.FC = () => {
                   placeholder="Km para el próximo cambio"
                   required
                   helperText={`Sugerencia: ${(formData.kmActuales || 0) + 10000} km`}
+                  className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 />
               </div>
             </CardBody>
           </Card>
         )}
-        
         {/* Paso 3: Datos del aceite y servicios adicionales */}
         {currentStep === 'aceite' && (
           <>
@@ -720,252 +724,410 @@ const OilChangeFormPage: React.FC = () => {
               <CardHeader title="Datos del Aceite" />
               <CardBody>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <AutocompleteInput
-                    label="Marca de Aceite"
-                    name="marcaAceite"
-                    value={formData.marcaAceite || ''}
-                    onChange={handleChange}
-                    options={autocompleteOptions.marcasAceite}
-                    placeholder="Marca del aceite"
-                    required
-                    error={validationErrors.marcaAceite}
-                  />
+                  {/* Marca de Aceite con Autocompletado Mejorado */}
+                  <div className="relative">
+                    <label htmlFor="marcaAceite" className="block text-sm font-medium text-gray-700 mb-1">
+                      Marca de Aceite <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <input
+                        id="marcaAceite"
+                        name="marcaAceite"
+                        value={formData.marcaAceite || ''}
+                        onChange={handleChange}
+                        placeholder="Marca del aceite"
+                        className={`block w-full rounded-md border-2 ${
+                          validationErrors.marcaAceite ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                        } shadow-sm sm:text-sm`}
+                        required
+                        list="marcasAceite"
+                      />
+                      <datalist id="marcasAceite">
+                        {autocompleteOptions.marcasAceite.map(marca => (
+                          <option key={marca} value={marca} />
+                        ))}
+                      </datalist>
+                    </div>
+                    {validationErrors.marcaAceite && <p className="mt-1 text-sm text-red-600">{validationErrors.marcaAceite}</p>}
+                  </div>
                   
-                  <AutocompleteInput
-                    label="Tipo de Aceite"
-                    name="tipoAceite"
-                    value={formData.tipoAceite || ''}
-                    onChange={handleChange}
-                    options={autocompleteOptions.tiposAceite}
-                    placeholder="Tipo de aceite"
-                    required
-                    error={validationErrors.tipoAceite}
-                  />
+                  {/* Tipo de Aceite con Autocompletado Mejorado */}
+                  <div className="relative">
+                    <label htmlFor="tipoAceite" className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipo de Aceite <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <input
+                        id="tipoAceite"
+                        name="tipoAceite"
+                        value={formData.tipoAceite || ''}
+                        onChange={handleChange}
+                        placeholder="Tipo de aceite"
+                        className={`block w-full rounded-md border-2 ${
+                          validationErrors.tipoAceite ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                        } shadow-sm sm:text-sm`}
+                        required
+                        list="tiposAceite"
+                      />
+                      <datalist id="tiposAceite">
+                        {autocompleteOptions.tiposAceite.map(tipo => (
+                          <option key={tipo} value={tipo} />
+                        ))}
+                      </datalist>
+                    </div>
+                    {validationErrors.tipoAceite && <p className="mt-1 text-sm text-red-600">{validationErrors.tipoAceite}</p>}
+                  </div>
                   
-                  <AutocompleteInput
-                    label="Viscosidad (SAE)"
-                    name="sae"
-                    value={formData.sae || ''}
-                    onChange={handleChange}
-                    options={autocompleteOptions.viscosidad}
-                    placeholder="Ej: 5W-30"
-                    required
-                    error={validationErrors.sae}
-                  />
+                  {/* Viscosidad SAE con Autocompletado Mejorado */}
+                  <div className="relative">
+                    <label htmlFor="sae" className="block text-sm font-medium text-gray-700 mb-1">
+                      Viscosidad (SAE) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <input
+                        id="sae"
+                        name="sae"
+                        value={formData.sae || ''}
+                        onChange={handleChange}
+                        placeholder="Ej: 5W-30"
+                        className={`block w-full rounded-md border-2 ${
+                          validationErrors.sae ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                        } shadow-sm sm:text-sm`}
+                        required
+                        list="viscosidadSae"
+                      />
+                      <datalist id="viscosidadSae">
+                        {autocompleteOptions.viscosidad.map(visc => (
+                          <option key={visc} value={visc} />
+                        ))}
+                      </datalist>
+                    </div>
+                    {validationErrors.sae && <p className="mt-1 text-sm text-red-600">{validationErrors.sae}</p>}
+                  </div>
                   
-                  <Input
-                    label="Cantidad (litros)"
-                    name="cantidadAceite"
-                    type="number"
-                    value={formData.cantidadAceite || 4}
-                    onChange={handleChange}
-                    required
-                    error={validationErrors.cantidadAceite}
-                    helperText="Ingrese un valor mayor a 0"
-                  />
+                  <div className="relative">
+                    <label htmlFor="cantidadAceite" className="block text-sm font-medium text-gray-700 mb-1">
+                      Cantidad (litros) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative rounded-md shadow-sm">
+                      <input
+                        id="cantidadAceite"
+                        name="cantidadAceite"
+                        type="number"
+                        value={formData.cantidadAceite || 4}
+                        onChange={handleChange}
+                        className={`block w-full rounded-md border-2 ${
+                          validationErrors.cantidadAceite ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                        } shadow-sm sm:text-sm`}
+                        required
+                      />
+                    </div>
+                    {validationErrors.cantidadAceite && (
+                      <p className="mt-1 text-sm text-red-600">{validationErrors.cantidadAceite}</p>
+                    )}
+                    {!validationErrors.cantidadAceite && (
+                      <p className="mt-1 text-sm text-gray-500">Ingrese un valor mayor a 0</p>
+                    )}
+                  </div>
                 </div>
               </CardBody>
             </Card>
-            
             <Card className="mb-6">
               <CardHeader title="Filtros y Servicios Adicionales" />
               <CardBody>
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {/* Filtro de aceite */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Filtro de Aceite"
+                      <input
+                        type="checkbox"
+                        id="filtroAceite"
                         name="filtroAceite"
                         checked={formData.filtroAceite || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="filtroAceite" className="ml-2 block text-sm font-medium text-gray-700">
+                        Filtro de Aceite
+                      </label>
                     </div>
                     
                     {formData.filtroAceite && (
-                      <Input
-                        label="Detalles del filtro"
-                        name="filtroAceiteNota"
-                        value={formData.filtroAceiteNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="filtroAceiteNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del filtro
+                        </label>
+                        <input
+                          id="filtroAceiteNota"
+                          name="filtroAceiteNota"
+                          value={formData.filtroAceiteNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Filtro de aire */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Filtro de Aire"
+                      <input
+                        type="checkbox"
+                        id="filtroAire"
                         name="filtroAire"
                         checked={formData.filtroAire || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="filtroAire" className="ml-2 block text-sm font-medium text-gray-700">
+                        Filtro de Aire
+                      </label>
                     </div>
                     
                     {formData.filtroAire && (
-                      <Input
-                        label="Detalles del filtro"
-                        name="filtroAireNota"
-                        value={formData.filtroAireNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="filtroAireNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del filtro
+                        </label>
+                        <input
+                          id="filtroAireNota"
+                          name="filtroAireNota"
+                          value={formData.filtroAireNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Filtro de habitáculo */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Filtro de Habitáculo"
+                      <input
+                        type="checkbox"
+                        id="filtroHabitaculo"
                         name="filtroHabitaculo"
                         checked={formData.filtroHabitaculo || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="filtroHabitaculo" className="ml-2 block text-sm font-medium text-gray-700">
+                        Filtro de Habitáculo
+                      </label>
                     </div>
                     
                     {formData.filtroHabitaculo && (
-                      <Input
-                        label="Detalles del filtro"
-                        name="filtroHabitaculoNota"
-                        value={formData.filtroHabitaculoNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="filtroHabitaculoNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del filtro
+                        </label>
+                        <input
+                          id="filtroHabitaculoNota"
+                          name="filtroHabitaculoNota"
+                          value={formData.filtroHabitaculoNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Filtro de combustible */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Filtro de Combustible"
+                      <input
+                        type="checkbox"
+                        id="filtroCombustible"
                         name="filtroCombustible"
                         checked={formData.filtroCombustible || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="filtroCombustible" className="ml-2 block text-sm font-medium text-gray-700">
+                        Filtro de Combustible
+                      </label>
                     </div>
                     
                     {formData.filtroCombustible && (
-                      <Input
-                        label="Detalles del filtro"
-                        name="filtroCombustibleNota"
-                        value={formData.filtroCombustibleNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="filtroCombustibleNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del filtro
+                        </label>
+                        <input
+                          id="filtroCombustibleNota"
+                          name="filtroCombustibleNota"
+                          value={formData.filtroCombustibleNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
-                  
                   {/* Aditivo */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Aditivo"
+                      <input
+                        type="checkbox"
+                        id="aditivo"
                         name="aditivo"
                         checked={formData.aditivo || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="aditivo" className="ml-2 block text-sm font-medium text-gray-700">
+                        Aditivo
+                      </label>
                     </div>
                     
                     {formData.aditivo && (
-                      <Input
-                        label="Detalles del aditivo"
-                        name="aditivoNota"
-                        value={formData.aditivoNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="aditivoNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del aditivo
+                        </label>
+                        <input
+                          id="aditivoNota"
+                          name="aditivoNota"
+                          value={formData.aditivoNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Refrigerante */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Refrigerante"
+                      <input
+                        type="checkbox"
+                        id="refrigerante"
                         name="refrigerante"
                         checked={formData.refrigerante || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="refrigerante" className="ml-2 block text-sm font-medium text-gray-700">
+                        Refrigerante
+                      </label>
                     </div>
                     
                     {formData.refrigerante && (
-                      <Input
-                        label="Detalles del refrigerante"
-                        name="refrigeranteNota"
-                        value={formData.refrigeranteNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="refrigeranteNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del refrigerante
+                        </label>
+                        <input
+                          id="refrigeranteNota"
+                          name="refrigeranteNota"
+                          value={formData.refrigeranteNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Diferencial */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Diferencial"
+                      <input
+                        type="checkbox"
+                        id="diferencial"
                         name="diferencial"
                         checked={formData.diferencial || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="diferencial" className="ml-2 block text-sm font-medium text-gray-700">
+                        Diferencial
+                      </label>
                     </div>
                     
                     {formData.diferencial && (
-                      <Input
-                        label="Detalles del diferencial"
-                        name="diferencialNota"
-                        value={formData.diferencialNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="diferencialNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del diferencial
+                        </label>
+                        <input
+                          id="diferencialNota"
+                          name="diferencialNota"
+                          value={formData.diferencialNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                   
                   {/* Caja */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Caja"
+                      <input
+                        type="checkbox"
+                        id="caja"
                         name="caja"
                         checked={formData.caja || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="caja" className="ml-2 block text-sm font-medium text-gray-700">
+                        Caja
+                      </label>
                     </div>
                     
                     {formData.caja && (
-                      <Input
-                        label="Detalles de la caja"
-                        name="cajaNota"
-                        value={formData.cajaNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="cajaNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles de la caja
+                        </label>
+                        <input
+                          id="cajaNota"
+                          name="cajaNota"
+                          value={formData.cajaNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
-                  
                   {/* Engrase */}
-                  <div className="border rounded p-4 shadow-sm">
+                  <div className="border-2 border-gray-300 rounded p-4 shadow-sm hover:border-primary-300 transition-colors">
                     <div className="flex items-center mb-2">
-                      <Checkbox
-                        label="Engrase"
+                      <input
+                        type="checkbox"
+                        id="engrase"
                         name="engrase"
                         checked={formData.engrase || false}
                         onChange={handleCheckboxChange}
+                        className="h-5 w-5 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
                       />
+                      <label htmlFor="engrase" className="ml-2 block text-sm font-medium text-gray-700">
+                        Engrase
+                      </label>
                     </div>
                     
                     {formData.engrase && (
-                      <Input
-                        label="Detalles del engrase"
-                        name="engraseNota"
-                        value={formData.engraseNota || ''}
-                        onChange={handleChange}
-                        placeholder="Marca, tipo, especificaciones..."
-                      />
+                      <div className="mt-3">
+                        <label htmlFor="engraseNota" className="block text-sm font-medium text-gray-700 mb-1">
+                          Detalles del engrase
+                        </label>
+                        <input
+                          id="engraseNota"
+                          name="engraseNota"
+                          value={formData.engraseNota || ''}
+                          onChange={handleChange}
+                          placeholder="Marca, tipo, especificaciones..."
+                          className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -975,14 +1137,20 @@ const OilChangeFormPage: React.FC = () => {
             <Card>
               <CardHeader title="Observaciones" />
               <CardBody>
-                <Textarea
-                  label="Observaciones (opcional)"
-                  name="observaciones"
-                  value={formData.observaciones || ''}
-                  onChange={handleChange}
-                  placeholder="Detalles adicionales, recomendaciones, estado del vehículo..."
-                  rows={4}
-                />
+                <div className="relative">
+                  <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700 mb-1">
+                    Observaciones (opcional)
+                  </label>
+                  <textarea
+                    id="observaciones"
+                    name="observaciones"
+                    value={formData.observaciones || ''}
+                    onChange={handleChange}
+                    placeholder="Detalles adicionales, recomendaciones, estado del vehículo..."
+                    rows={4}
+                    className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm resize-none"
+                  ></textarea>
+                </div>
               </CardBody>
             </Card>
           </>
@@ -1000,19 +1168,19 @@ const OilChangeFormPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Nombre del Cliente:</p>
-                      <p className="text-base">{formData.nombreCliente || '-'}</p>
+                      <p className="text-base font-semibold">{formData.nombreCliente || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Teléfono:</p>
-                      <p className="text-base">{formData.celular || '-'}</p>
+                      <p className="text-base font-semibold">{formData.celular || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Fecha de Servicio:</p>
-                      <p className="text-base">{formatDateForDisplay(formData.fechaServicio)}</p>
+                      <p className="text-base font-semibold">{formatDateForDisplay(formData.fechaServicio)}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Operario:</p>
-                      <p className="text-base">{formData.nombreOperario || '-'}</p>
+                      <p className="text-base font-semibold">{formData.nombreOperario || '-'}</p>
                     </div>
                   </div>
                 </div>
@@ -1023,54 +1191,53 @@ const OilChangeFormPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Dominio (Patente):</p>
-                      <p className="text-base">{formData.dominioVehiculo || '-'}</p>
+                      <p className="text-base font-semibold">{formData.dominioVehiculo || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Tipo de Vehículo:</p>
-                      <p className="text-base">{formData.tipoVehiculo || '-'}</p>
+                      <p className="text-base font-semibold">{formData.tipoVehiculo || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Marca y Modelo:</p>
-                      <p className="text-base">{`${formData.marcaVehiculo || '-'} ${formData.modeloVehiculo || ''}`}</p>
+                      <p className="text-base font-semibold">{`${formData.marcaVehiculo || '-'} ${formData.modeloVehiculo || ''}`}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Año:</p>
-                      <p className="text-base">{formData.añoVehiculo || '-'}</p>
+                      <p className="text-base font-semibold">{formData.añoVehiculo || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Kilometraje Actual:</p>
-                      <p className="text-base">{formData.kmActuales?.toLocaleString() || '-'} km</p>
+                      <p className="text-base font-semibold">{formData.kmActuales?.toLocaleString() || '-'} km</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Próximo Cambio (Km):</p>
-                      <p className="text-base">{formData.kmProximo?.toLocaleString() || '-'} km</p>
+                      <p className="text-base font-semibold">{formData.kmProximo?.toLocaleString() || '-'} km</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Próximo Cambio (Fecha):</p>
-                      <p className="text-base">{formatDateForDisplay(formData.fechaProximoCambio)}</p>
+                      <p className="text-base font-semibold">{formatDateForDisplay(formData.fechaProximoCambio)}</p>
                     </div>
                   </div>
                 </div>
-                
                 {/* Información del aceite */}
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-3 border-b pb-2">Datos del Aceite</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Marca de Aceite:</p>
-                      <p className="text-base">{formData.marcaAceite || '-'}</p>
+                      <p className="text-base font-semibold">{formData.marcaAceite || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Tipo de Aceite:</p>
-                      <p className="text-base">{formData.tipoAceite || '-'}</p>
+                      <p className="text-base font-semibold">{formData.tipoAceite || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Viscosidad (SAE):</p>
-                      <p className="text-base">{formData.sae || '-'}</p>
+                      <p className="text-base font-semibold">{formData.sae || '-'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Cantidad:</p>
-                      <p className="text-base">{formData.cantidadAceite || '-'} litros</p>
+                      <p className="text-base font-semibold">{formData.cantidadAceite || '-'} litros</p>
                     </div>
                   </div>
                 </div>
@@ -1086,65 +1253,65 @@ const OilChangeFormPage: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {formData.filtroAceite && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Filtro de Aceite:</p>
-                          <p className="text-base text-green-600">Sí{formData.filtroAceiteNota ? ` - ${formData.filtroAceiteNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.filtroAceiteNota ? `${formData.filtroAceiteNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.filtroAire && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Filtro de Aire:</p>
-                          <p className="text-base text-green-600">Sí{formData.filtroAireNota ? ` - ${formData.filtroAireNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.filtroAireNota ? `${formData.filtroAireNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.filtroHabitaculo && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Filtro de Habitáculo:</p>
-                          <p className="text-base text-green-600">Sí{formData.filtroHabitaculoNota ? ` - ${formData.filtroHabitaculoNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.filtroHabitaculoNota ? `${formData.filtroHabitaculoNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.filtroCombustible && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Filtro de Combustible:</p>
-                          <p className="text-base text-green-600">Sí{formData.filtroCombustibleNota ? ` - ${formData.filtroCombustibleNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.filtroCombustibleNota ? `${formData.filtroCombustibleNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.aditivo && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Aditivo:</p>
-                          <p className="text-base text-green-600">Sí{formData.aditivoNota ? ` - ${formData.aditivoNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.aditivoNota ? `${formData.aditivoNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.refrigerante && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Refrigerante:</p>
-                          <p className="text-base text-green-600">Sí{formData.refrigeranteNota ? ` - ${formData.refrigeranteNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.refrigeranteNota ? `${formData.refrigeranteNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.diferencial && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Diferencial:</p>
-                          <p className="text-base text-green-600">Sí{formData.diferencialNota ? ` - ${formData.diferencialNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.diferencialNota ? `${formData.diferencialNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.caja && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Caja:</p>
-                          <p className="text-base text-green-600">Sí{formData.cajaNota ? ` - ${formData.cajaNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.cajaNota ? `${formData.cajaNota}` : 'Sí'}</p>
                         </div>
                       )}
                       
                       {formData.engrase && (
-                        <div>
+                        <div className="bg-green-50 p-3 rounded-md">
                           <p className="text-sm font-medium text-gray-500">Engrase:</p>
-                          <p className="text-base text-green-600">Sí{formData.engraseNota ? ` - ${formData.engraseNota}` : ''}</p>
+                          <p className="text-base text-green-600 font-semibold">✓ {formData.engraseNota ? `${formData.engraseNota}` : 'Sí'}</p>
                         </div>
                       )}
                     </div>
@@ -1155,14 +1322,15 @@ const OilChangeFormPage: React.FC = () => {
                 {formData.observaciones && (
                   <div>
                     <h3 className="text-lg font-medium text-gray-900 mb-3 border-b pb-2">Observaciones</h3>
-                    <p className="text-base text-gray-700 whitespace-pre-line">{formData.observaciones}</p>
+                    <div className="bg-gray-50 p-4 rounded-md">
+                      <p className="text-base text-gray-700 whitespace-pre-line">{formData.observaciones}</p>
+                    </div>
                   </div>
                 )}
               </div>
             </CardBody>
           </Card>
         )}
-        
         {/* Botones de navegación */}
         <div className="flex justify-between mt-8">
           {currentStep === 'cliente' ? (
@@ -1201,7 +1369,11 @@ const OilChangeFormPage: React.FC = () => {
               type="submit"
               color="primary"
               disabled={saving}
-              icon={saving ? <Spinner size="sm" color="white" className="mr-2" /> : <PlusIcon className="h-5 w-5" />}
+              icon={
+                saving 
+                  ? <Spinner size="sm" color="white" className="mr-2" /> 
+                  : <PlusIcon className="h-5 w-5" />
+              }
             >
               {saving 
                 ? (isEditing ? 'Guardando cambios...' : 'Registrando cambio...') 

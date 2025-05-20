@@ -1,3 +1,77 @@
+// src/services/enhancedPdfService.ts
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { OilChange, Lubricentro } from '../types';
+
+// Logo predeterminado en base64 (un simple logo genérico)
+const defaultLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4wEFBisYW4LrGwAAA9tJREFUeNrt3U9IVFEUx/HvGzVNRfwDpRZZ2SLSQoJolWVEm6y/tHARQZtolWULaVEbdREYLXPRHyjbSJsiFxH9wQiMMrLFgJlZUYtpXLeF5Ixv5r1535s/d+Y9zwcG4XLHd849575774wHIiIiIiIiIiIiIiIiIlIUdUAnMAKMA9+BFDADpIGfwCQwDAwA14HdgK92WVWB9BQQgU1rgTtA1YID6XA4nDZgNAcglq93wINygPENjs42bVkAERGRUgujPMbSCBwH9gC1QBXwCxgDngH9wOfQOueHH3V11K9YQcXixRQl/wW/5PGZpxz+P7+Bc8CzvEYF8NyKAWAAOAt4QDtwN49ebtOHnMboLLwfBV+heobfNbF9xhCwwtOA9OTxgZc8DVaeoXnU5wfv6zDww4MQ8jJPojVuP9RVQM+IxqS+v8DDEBJGrGZWbAe6C7TGDQM1Hobw1JGkBTiRh3WuHejIMj99JFkTcbA3eRWwFbgfwxo3CJx2/I59gG8zQBdwLPj8SXuHBccDOoN9xw1bXtgYkAlP9DzwBJgKJt7pYJcq22QxiNnfpCJa54DXOXz2jxhHxzGbOUUkXuX4fTMOQZxXOPnZb1M4bjPzHIJoVDj52Qsctt8pCMdF9UrEHPLMlheuQGx0CKLLcY3qtVnCUccgHgfnEXH13PJ35sJkEu/DRLzaphnYTf3GZo4tMPcTAz/B58i6Io5o1QJ7g+3YDXaPT38M6xtW77B62czhVk09hptdqRwOFuO+dnqLbSMzX/E04LHl0fPBPshvW57a3KizHnN9pI/SuCbfXcJxxIDNhTozPwJ8KaHTyoklODqgSDcyQyk9jHAUOJZXQhAyHIyOVxZf/ztwkpnTMSd9xhLMkx9+iRyRXo1JZqbUFcvFwKVyeegsxvOi8OZn/y0VBhGRwkd5jKURaAH2YR591mL+Yl4K+IA5fX6GedRmXiOj3L+Sqi3YLIbHxY/FvJPkcAHXuE9Al7ZfREQkPwdxdlx4FXP9eQrzsNwHx7VpHNsOkiGP7Ss7vGCh8YJU2vbXbdhXdnh8eTqXBsIvPRyLwWYTCO+K+GG4a4tMZl5rI4Aw3PXMQZCZl3JERCR2QE4CExFUGbfeaLG3BDaNYb7c7YZNr0GYd4cAbQqkTYGIiIj+6CrWyMv1yF6kU6hDyMqIPq8ioj0k02HkKObVqOkCb7+mMc9XjAbvDonFHuK6hzhmTgF4WdpnWcN8ey6TJ0HMKYBeQPcQERERERERERERERERERERl/wBsSpUZnbkoYYAAAAASUVORK5CYII=';
+
+// Función para asegurar que una fecha sea un objeto Date
+const ensureDateObject = (date: any): Date => {
+  if (!date) return new Date();
+  
+  if (date instanceof Date) return date;
+  
+  if (typeof date === 'string') return new Date(date);
+  
+  if (date.toDate && typeof date.toDate === 'function') {
+    try {
+      return date.toDate();
+    } catch (e) {
+      console.warn('Error al convertir Timestamp a Date:', e);
+      return new Date();
+    }
+  }
+  
+  return new Date();
+};
+
+// Función para formatear fechas en español
+const formatDate = (date: any): string => {
+  const dateObj = ensureDateObject(date);
+  return dateObj.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+};
+
+// Calcular días restantes hasta próximo cambio
+const getDaysRemaining = (date: any): number => {
+  const today = new Date();
+  const targetDate = ensureDateObject(date);
+  const diffTime = targetDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+// Función personalizada para crear rectángulos redondeados
+const drawRoundedRect = (
+  pdf: any, 
+  x: number, 
+  y: number, 
+  width: number, 
+  height: number, 
+  radius: number, 
+  style: string
+): void => {
+  const cornerRadius = Math.min(radius, height / 2, width / 2);
+  
+  if (style === 'F' || style === 'FD') {
+    pdf.rect(x, y, width, height, style);
+    return;
+  }
+  
+  // Si la biblioteca jsPDF tiene soporte nativo para roundedRect, usarlo
+  if (typeof pdf.roundedRect === 'function') {
+    pdf.roundedRect(x, y, width, height, radius, radius, style);
+    return;
+  }
+  
+  // Implementación alternativa simple (no redondeada)
+  pdf.rect(x, y, width, height, style);
+};
+
 /**
  * Servicio mejorado para la generación de PDF y utilidades relacionadas
  */
@@ -64,72 +138,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       whatsappUrlWithPhone
     };
   },
-  /**
- * Servicio mejorado para la generación de PDF y utilidades relacionadas
- */
-const enhancedPdfService = {
-  /**
-   * Genera un mensaje para compartir en WhatsApp con un formato mejorado y atractivo
-   * @param oilChange - Cambio de aceite
-   * @param lubricentroName - Nombre del lubricentro
-   * @returns Objeto con el mensaje formateado y URLs para compartir
-   */
-  generateWhatsAppMessage: (oilChange: OilChange, lubricentroName: string): { 
-    message: string, 
-    whatsappUrl: string, 
-    whatsappUrlWithPhone: string | null 
-  } => {
-    // Crear un mensaje más atractivo con emojis y mejor formato
-    const message = `
-🔧 *${lubricentroName}* 🔧
-────────────────────
-*CAMBIO DE ACEITE N°: ${oilChange.nroCambio}*
-────────────────────
-
-🚗 *Vehículo:* ${oilChange.marcaVehiculo} ${oilChange.modeloVehiculo}
-🔢 *Dominio:* ${oilChange.dominioVehiculo}
-👤 *Cliente:* ${oilChange.nombreCliente}
-📅 *Fecha:* ${formatDate(oilChange.fecha)}
-📊 *Kilometraje:* ${oilChange.kmActuales.toLocaleString()} km
-
-🛢️ *Aceite utilizado:*
-${oilChange.marcaAceite} ${oilChange.tipoAceite} ${oilChange.sae}
-Cantidad: ${oilChange.cantidadAceite} litros
-
-${oilChange.filtroAceite || oilChange.filtroAire || oilChange.filtroHabitaculo || oilChange.filtroCombustible ? '🔄 *Filtros cambiados:*' : ''}
-${oilChange.filtroAceite ? '✅ Filtro de aceite' : ''}
-${oilChange.filtroAire ? '✅ Filtro de aire' : ''}
-${oilChange.filtroHabitaculo ? '✅ Filtro de habitáculo' : ''}
-${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
-
-📌 *PRÓXIMO CAMBIO:*
-📆 ${formatDate(oilChange.fechaProximoCambio)} o
-🛣️ ${oilChange.kmProximo.toLocaleString()} km
-(lo que ocurra primero)
-
-¡Gracias por confiar en nosotros!
-────────────────────
-`;
-    
-    // Crear URL para WhatsApp
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    
-    // URL con número telefónico si está disponible
-    let whatsappUrlWithPhone = null;
-    if (oilChange.celular) {
-      const phoneNumber = oilChange.celular.replace(/\D/g, '');
-      if (phoneNumber) {
-        whatsappUrlWithPhone = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
-      }
-    }
-    
-    return {
-      message,
-      whatsappUrl,
-      whatsappUrlWithPhone
-    };
-  },
+  
   /**
    * Genera un PDF con jsPDF con un diseño profesional mejorado
    * @param oilChange - Datos del cambio de aceite
@@ -275,7 +284,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     
     yPos += 10;
     const clientStartY = yPos;
-    
+    yPos += 3;
     // Contenido de datos del cliente
     pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
     pdf.setFontSize(10);
@@ -312,6 +321,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
     pdf.text("DATOS DEL VEHÍCULO", margin + columnWidth + 15, yPos - 4.5);
+        yPos += 3;
     
     // Contenido de datos del vehículo
     pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
@@ -346,7 +356,8 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     pdf.text(`${oilChange.kmActuales.toLocaleString()} km`, margin + columnWidth + 45, yPos);
     
     // Ajustar la posición Y para la siguiente sección
-    yPos += 15;
+    // Tomamos el máximo entre ambas columnas para asegurar que no se superpongan
+    yPos = Math.max(clientStartY + 31, yPos + 10);
     
     // === SECCIÓN ACEITE Y PRÓXIMO SERVICIO ===
     pdf.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
@@ -398,6 +409,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       pdf.setFont('helvetica', 'bold');
       const alertText = `¡ALERTA! Cambio vencido hace ${Math.abs(daysRemaining)} días`;
       pdf.text(alertText, margin + (contentWidth / 2) - (pdf.getTextWidth(alertText) / 2), yPos + 6.5);
+      yPos += 15;
     } else if (daysRemaining <= 7) {
       // Alerta de cambio próximo
       yPos += 12;
@@ -418,9 +430,10 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       }
       
       pdf.text(alertText, margin + (contentWidth / 2) - (pdf.getTextWidth(alertText) / 2), yPos + 6.5);
+      yPos += 15;
+    } else {
+      yPos += 5; // Si no hay alerta, solo agregar un pequeño espacio
     }
-    
-    yPos += 15;
     
     // === SECCIÓN FILTROS Y SERVICIOS ===
     pdf.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -434,7 +447,8 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     
     // Crear grid para servicios (3 columnas)
     const serviceItemWidth = contentWidth / 3 - 6;
-    const serviceItemHeight = 16;
+    // Reducimos altura de elementos para ahorrar espacio
+    const serviceItemHeight = 12; 
     const itemsPerRow = 3;
     let currentColumn = 0;
     let startY = yPos;
@@ -458,7 +472,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       const row = Math.floor(currentColumn / itemsPerRow);
       
       const itemX = margin + (col * (serviceItemWidth + 6));
-      const itemY = startY + (row * (serviceItemHeight + 4));
+      const itemY = startY + (row * (serviceItemHeight + 2)); // Reducimos el espacio entre filas
       
       // Fondo del elemento de servicio
       const bgColorDone = service.done ? [237, 247, 237] : [253, 237, 237]; // Verde claro si se hizo, rojo claro si no
@@ -469,124 +483,147 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
       drawRoundedRect(pdf, itemX, itemY, serviceItemWidth, serviceItemHeight, 1, 'FD');
       
       // Mostrar check o X
-      pdf.setFontSize(12);
+      pdf.setFontSize(10); // Tamaño reducido
       const textColorStatus = service.done ? [46, 125, 50] : [211, 47, 47]; // Verde o rojo
       pdf.setTextColor(textColorStatus[0], textColorStatus[1], textColorStatus[2]);
       pdf.setFont('helvetica', 'bold');
       pdf.text(service.done ? '✓' : '✗', itemX + 4, itemY + 5);
       
       // Nombre del servicio
-      pdf.setFontSize(9);
+      pdf.setFontSize(8); // Tamaño reducido
       pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
       pdf.setFont('helvetica', 'bold');
       pdf.text(service.name, itemX + 10, itemY + 5);
       
-      // Nota (si existe)
+      // Nota (si existe) - Simplificamos para ahorrar espacio
       if (service.done && service.note) {
-        pdf.setFontSize(8);
+        pdf.setFontSize(7); // Tamaño reducido
         pdf.setTextColor(textLight[0], textLight[1], textLight[2]);
         pdf.setFont('helvetica', 'normal');
         
         // Limitar longitud de la nota si es muy larga
         let note = service.note;
-        if (note && note.length > 30) {
-          note = note.substring(0, 27) + '...';
+        if (note && note.length > 25) {
+          note = note.substring(0, 22) + '...';
         }
         
         if (note) {
-          pdf.text(note, itemX + 10, itemY + 12);
+          pdf.text(note, itemX + 10, itemY + 10);
         }
       }
       
       currentColumn++;
     });
+    
     // Ajustar la posición Y para la siguiente sección
-    yPos = startY + (Math.ceil(services.length / itemsPerRow) * (serviceItemHeight + 4));
+    // Calculamos cuántas filas ocupan los servicios y ajustamos la posición Y
+    const serviceRows = Math.ceil(services.length / itemsPerRow);
+    const servicesHeight = serviceRows * (serviceItemHeight + 2); // Espacio reducido entre filas
+    yPos = startY + servicesHeight + 3; // Margen reducido después de servicios
     
     // === SECCIÓN OBSERVACIONES (si existen) ===
-    if (oilChange.observaciones) {
-      yPos += 10;
+    let hasObservations = false;
+    
+    if (oilChange.observaciones && oilChange.observaciones.trim() !== '') {
+      hasObservations = true;
+      
+      // Calculamos espacio disponible para evitar crear una nueva página
+      const remainingSpace = pageHeight - yPos - 50; // 50mm para área de firmas y pie de página
       
       pdf.setFillColor(90, 90, 90); // Gris oscuro
-      drawRoundedRect(pdf, margin, yPos, contentWidth, 8, 1, 'F');
+      drawRoundedRect(pdf, margin, yPos, contentWidth, 6, 1, 'F'); // Altura de título reducida
       
-      pdf.setFontSize(11);
+      pdf.setFontSize(10); // Tamaño reducido
       pdf.setTextColor(255, 255, 255);
       pdf.setFont('helvetica', 'bold');
-      pdf.text("OBSERVACIONES", margin + 5, yPos + 5.5);
+      pdf.text("OBSERVACIONES", margin + 5, yPos + 4);
       
-      yPos += 10;
+      yPos += 8; // Espacio reducido
       
       // Marco para las observaciones
       pdf.setFillColor(248, 249, 250); // Fondo gris muy claro
-      drawRoundedRect(pdf, margin, yPos, contentWidth, 30, 1, 'F');
+      
+      // Ajustar altura dinámicamente según espacio disponible
+      const obsHeight = Math.min(25, remainingSpace - 10); // Máximo 25mm pero no más que el espacio restante
+      drawRoundedRect(pdf, margin, yPos, contentWidth, obsHeight, 1, 'F');
       
       // Texto de observaciones
-      pdf.setFontSize(9);
+      pdf.setFontSize(8); // Tamaño reducido
       pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
       pdf.setFont('helvetica', 'normal');
       
-      // Dividir texto largo en múltiples líneas (limitadas a 5 líneas)
+      // Dividir texto largo en múltiples líneas (limitamos líneas según altura disponible)
       const splitText = pdf.splitTextToSize(oilChange.observaciones, contentWidth - 10);
-      const maxLines = 5;
+      const maxLines = Math.floor(obsHeight / 4); // Aproximadamente 4mm por línea
       const textToDisplay = splitText.slice(0, maxLines);
       
       // Imprimir texto con padding interno
       for (let i = 0; i < textToDisplay.length; i++) {
-        pdf.text(textToDisplay[i], margin + 5, yPos + 7 + (i * 5));
+        pdf.text(textToDisplay[i], margin + 5, yPos + 5 + (i * 4));
       }
       
       // Si hay más texto del que se muestra, indicarlo
       if (splitText.length > maxLines) {
         pdf.setFont('helvetica', 'italic');
-        pdf.text("...(texto truncado)", margin + 5, yPos + 7 + (maxLines * 5));
+        pdf.text("...(texto truncado)", margin + 5, yPos + 5 + (maxLines * 4) - 2);
       }
       
-      yPos += 35;
+      yPos += obsHeight + 3; // Actualizamos la posición después de las observaciones
     }
     
     // === ÁREA PARA FIRMAS ===
-    yPos = Math.max(yPos, 230); // Asegurar espacio mínimo
+    // Verificar espacio disponible para firmas y pie de página
+    const remainingSpace = pageHeight - yPos;
+    const requiredSpace = 60; // Espacio mínimo necesario para firmas y pie de página
+    
+    // Si no hay espacio suficiente, reducir elementos o compactarlos
+    if (remainingSpace < requiredSpace) {
+      // En lugar de añadir una página nueva, ajustamos la distribución para caber en una página
+      yPos = pageHeight - requiredSpace;
+    }
     
     pdf.setDrawColor(150, 150, 150);
     pdf.setLineWidth(0.5);
     
+    yPos+=15;
     // Línea para firma del operario
     pdf.line(margin + 20, yPos, margin + contentWidth / 2 - 20, yPos);
-    pdf.setFontSize(9);
+    pdf.setFontSize(8); // Tamaño reducido
     pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
     pdf.setFont('helvetica', 'normal');
     const operarioText = "Firma del Operario";
-    pdf.text(operarioText, margin + (contentWidth / 4) - (pdf.getTextWidth(operarioText) / 2), yPos + 5);
+    pdf.text(operarioText, margin + (contentWidth / 4) - (pdf.getTextWidth(operarioText) / 2), yPos + 4);
     
     // Línea para firma del cliente
     pdf.line(margin + contentWidth / 2 + 20, yPos, margin + contentWidth - 20, yPos);
     const clienteText = "Firma del Cliente";
-    pdf.text(clienteText, margin + (3 * contentWidth / 4) - (pdf.getTextWidth(clienteText) / 2), yPos + 5);
+    pdf.text(clienteText, margin + (3 * contentWidth / 4) - (pdf.getTextWidth(clienteText) / 2), yPos + 4);
+    
     // === PIE DE PÁGINA ===
-    yPos = pageHeight - 30;
+    // Calculamos posición para pie de página, asegurando que quede en la primera página
+    yPos = pageHeight - 25;
     
     // Línea horizontal
     pdf.setLineWidth(0.75);
     pdf.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     pdf.line(margin, yPos, pageWidth - margin, yPos);
     
-    yPos += 8;
+    yPos += 6;
     
     // Texto del pie
-    pdf.setFontSize(8);
+    pdf.setFontSize(7); // Tamaño reducido
     pdf.setTextColor(textLight[0], textLight[1], textLight[2]);
     pdf.setFont('helvetica', 'normal');
     
     const footerText1 = "Este documento es un comprobante del servicio realizado y no tiene validez como factura.";
     pdf.text(footerText1, pageWidth / 2 - (pdf.getTextWidth(footerText1) / 2), yPos);
     
-    yPos += 5;
+    yPos += 4;
     
     const footerText2 = `Próximo cambio: a los ${oilChange.kmProximo.toLocaleString()} km o el ${formatDate(oilChange.fechaProximoCambio)}, lo que ocurra primero.`;
     pdf.text(footerText2, pageWidth / 2 - (pdf.getTextWidth(footerText2) / 2), yPos);
     
-    yPos += 5;
+    yPos += 4;
     
     // Información adicional del lubricentro
     if (lubricentro) {
@@ -604,6 +641,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
     
     return filename;
   },
+  
   /**
    * Exporta los datos de cambios de aceite a Excel
    * @param oilChanges - Lista de cambios de aceite

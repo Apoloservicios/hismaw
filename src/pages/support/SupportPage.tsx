@@ -1,8 +1,8 @@
 // src/pages/support/SupportPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { PageContainer, Card, CardHeader, CardBody, Button, Alert } from '../../components/ui';
-import { getLubricentroById } from '../../services/lubricentroService';
+import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Spinner } from '../../components/ui';
+import { getLubricentroById } from '../../services/lubricentroService'; // Importamos el servicio
 
 // Iconos
 import {
@@ -22,6 +22,24 @@ const SupportPage: React.FC = () => {
   const [messageType, setMessageType] = useState('question');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lubricentroInfo, setLubricentroInfo] = useState<any>(null);
+  
+  // Obtener información del lubricentro cuando se carga el componente
+  useEffect(() => {
+    const fetchLubricentroInfo = async () => {
+      if (userProfile?.lubricentroId) {
+        try {
+          const lubricentro = await getLubricentroById(userProfile.lubricentroId);
+          setLubricentroInfo(lubricentro);
+        } catch (error) {
+          console.error('Error al obtener información del lubricentro:', error);
+        }
+      }
+    };
+    
+    fetchLubricentroInfo();
+  }, [userProfile]);
   
   // Preguntas frecuentes
   const faqs = [
@@ -35,7 +53,7 @@ const SupportPage: React.FC = () => {
     },
     {
       question: '¿Qué hago si mi período de prueba expiró?',
-      answer: 'Si tu período de prueba ha expirado, contacta a nuestro equipo de soporte a través del formulario en esta página o enviando un correo a soporte@lubricentro-app.com para activar un plan de pago.'
+      answer: 'Si tu período de prueba ha expirado, contacta a nuestro equipo de soporte a través del formulario en esta página o enviando un correo a info@hisma.com.ar para activar un plan de pago.'
     },
     {
       question: '¿Cómo puedo exportar mis datos a PDF?',
@@ -47,25 +65,107 @@ const SupportPage: React.FC = () => {
     }
   ];
   
-  // Manejar envío del formulario de contacto
-  const handleSubmit = (e: React.FormEvent) => {
+  // Método para abrir el cliente de correo
+  const handleDirectEmail = () => {
+    const subject = encodeURIComponent(`Consulta de soporte: ${messageType}`);
+    
+    // Construir el cuerpo del correo con información detallada
+    let body = `Consulta de soporte: ${messageType}\n\n${message}\n\n`;
+    
+    // Agregar información del usuario y lubricentro si está disponible
+    if (userProfile) {
+      body += "---------------------------------\n";
+      body += "Información del usuario:\n";
+      body += `Nombre: ${userProfile.nombre || ''} ${userProfile.apellido || ''}\n`;
+      body += `Email: ${userProfile.email || ''}\n`;
+      body += `Rol: ${userProfile.role || ''}\n`;
+      
+      if (userProfile.lubricentroId) {
+        body += `ID Lubricentro: ${userProfile.lubricentroId}\n`;
+        
+        if (lubricentroInfo) {
+          body += `Nombre Lubricentro: ${lubricentroInfo.nombre || ''}\n`;
+          body += `Dirección: ${lubricentroInfo.direccion || ''}\n`;
+          body += `Teléfono: ${lubricentroInfo.telefono || ''}\n`;
+        }
+      }
+    }
+    
+    window.location.href = `mailto:info@hisma.com.ar?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+  
+  // Manejar envío del formulario
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!message.trim()) {
-      setError('Por favor, ingresa un mensaje');
+      setError('Por favor, ingrese un mensaje');
+      // Limpiar el mensaje después de 5 segundos
+      setTimeout(() => {
+        setError(null);
+      }, 5000);
       return;
     }
     
-    // Aquí iría la lógica para enviar el mensaje al soporte
-    // En una implementación real, esto podría enviar un email o crear un ticket en un sistema de soporte
-    
-    // Simulamos éxito
-    setSubmitted(true);
+    setIsSubmitting(true);
     setError(null);
     
-    // Reset form
-    setMessage('');
-    setMessageType('question');
+    try {
+      // Preparar datos para enviar al servidor con información detallada
+      const formData = {
+        name: userProfile ? `${userProfile.nombre || ''} ${userProfile.apellido || ''}` : 'Usuario HISMA',
+        email: userProfile?.email || 'info@hisma.com.ar',
+        message: `Tipo de consulta: ${messageType}\n\n${message}`,
+        userInfo: {
+          id: userProfile?.id || '',
+          email: userProfile?.email || '',
+          role: userProfile?.role || '',
+          lubricentroId: userProfile?.lubricentroId || '',
+          lubricentroNombre: lubricentroInfo?.nombre || '',
+          lubricentroDireccion: lubricentroInfo?.direccion || '',
+          lubricentroTelefono: lubricentroInfo?.telefono || ''
+        }
+      };
+      
+      console.log('Enviando datos:', formData); // Para depuración
+      
+      // Realizar la petición al servidor
+      const response = await fetch('https://hisma.com.ar/api/send-email.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      // Procesar la respuesta
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+      
+      const responseText = await response.text();
+      console.log('Respuesta del servidor:', responseText); // Para depuración
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (error) {
+        throw new Error('Error al procesar la respuesta del servidor');
+      }
+      
+      if (result.success) {
+        setSubmitted(true);
+        setMessage('');
+        setMessageType('question');
+      } else {
+        throw new Error(result.message || 'Error al enviar el mensaje');
+      }
+    } catch (error) {
+      console.error('Error al enviar el mensaje:', error);
+      setError('Error al enviar el mensaje. Por favor, intente nuevamente más tarde o use la opción de correo electrónico directo.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   return (
@@ -198,8 +298,6 @@ const SupportPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                
-                
               </div>
             </CardBody>
           </Card>
@@ -235,6 +333,17 @@ const SupportPage: React.FC = () => {
                     <Alert type="error" dismissible onDismiss={() => setError(null)}>
                       {error}
                     </Alert>
+                  )}
+                  
+                  {/* Muestra información del lubricentro si está disponible */}
+                  {lubricentroInfo && (
+                    <div className="bg-gray-50 p-3 rounded-md border-l-4 border-primary-500">
+                      <h4 className="text-sm font-medium text-gray-700">Consulta desde:</h4>
+                      <p className="text-sm text-gray-600">{lubricentroInfo.nombre}</p>
+                      {lubricentroInfo.direccion && (
+                        <p className="text-xs text-gray-500">{lubricentroInfo.direccion}</p>
+                      )}
+                    </div>
                   )}
                   
                   <div>
@@ -273,13 +382,32 @@ const SupportPage: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div>
+                  <div className="flex space-x-4">
+                    <Button
+                      type="button"
+                      color="secondary"
+                      variant="outline"
+                      className="flex items-center"
+                      onClick={handleDirectEmail}
+                    >
+                      <EnvelopeIcon className="h-5 w-5 mr-2" />
+                      Usar correo
+                    </Button>
+                    
                     <Button
                       type="submit"
                       color="primary"
-                      fullWidth
+                      className="flex-1"
+                      disabled={isSubmitting}
                     >
-                      Enviar mensaje
+                      {isSubmitting ? (
+                        <>
+                          <Spinner size="sm" color="white" className="mr-2" />
+                          Enviando...
+                        </>
+                      ) : (
+                        'Enviar mensaje'
+                      )}
                     </Button>
                   </div>
                   
@@ -293,8 +421,6 @@ const SupportPage: React.FC = () => {
           </Card>
         </div>
       </div>
-      
-     
     </PageContainer>
   );
 };

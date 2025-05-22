@@ -1,13 +1,12 @@
 // src/pages/users/UserProfilePage.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Input, Spinner, Tabs, Tab } from '../../components/ui';
+import { PageContainer, Card, CardHeader, CardBody, Button, Alert, Input, Spinner, Tabs } from '../../components/ui';
 import { getLubricentroById, updateLubricentro } from '../../services/lubricentroService';
 import { updateUser } from '../../services/userService';
 import ImageUploader from '../../components/common/ImageUploader';
 import { Lubricentro, User } from '../../types';
 import LogoUploader from '../../components/common/LogoUploader';
-
 
 const UserProfilePage: React.FC = () => {
   const { userProfile, updateUserProfile } = useAuth();
@@ -40,6 +39,7 @@ const UserProfilePage: React.FC = () => {
     logoUrl: ''
   });
 
+  // Debug para el logo
   useEffect(() => {
     if (lubricentro) {
       console.log("Logo URL:", lubricentro.logoUrl);
@@ -99,6 +99,30 @@ const UserProfilePage: React.FC = () => {
       loadData();
     }
   }, [userProfile]);
+
+  // Efecto para recargar datos cuando se cambia de pestaña
+  useEffect(() => {
+    // Cuando cambiamos a la pestaña de lubricentro, forzar recarga de datos
+    if (activeTab === 'lubricentro' && userProfile?.lubricentroId) {
+      getLubricentroById(userProfile.lubricentroId)
+        .then(data => {
+          setLubricentro(data);
+          // También actualizar el formulario con los datos más recientes
+          setLubricentroFormData({
+            fantasyName: data.fantasyName || '',
+            domicilio: data.domicilio || '',
+            phone: data.phone || '',
+            email: data.email || '',
+            cuit: data.cuit || '',
+            responsable: data.responsable || '',
+            logoUrl: data.logoUrl || ''
+          });
+        })
+        .catch(err => {
+          console.error('Error al recargar lubricentro:', err);
+        });
+    }
+  }, [activeTab, userProfile]);
   
   // Manejar cambios en los campos del usuario
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,12 +137,19 @@ const UserProfilePage: React.FC = () => {
   };
   
   // Manejar subida exitosa de imagen para el perfil de usuario
-  const handleImageUploaded = (imageUrl: string) => {
-    setFormData(prev => ({ ...prev, photoURL: imageUrl }));
+  const handleImageUploaded = (imageData: string | { url: string }) => {
+    // Si imageData es un string (versión antigua)
+    if (typeof imageData === 'string') {
+      setFormData(prev => ({ ...prev, photoURL: imageData }));
+    } 
+    // Si imageData es un objeto (nueva versión)
+    else {
+      setFormData(prev => ({ ...prev, photoURL: imageData.url }));
+    }
   };
   
   // Manejar subida exitosa de logo del lubricentro
-  const handleLogoUploaded = async (imageUrl: string) => {
+  const handleLogoUploaded = (logoData: { url: string, base64: string }) => {
     if (!userProfile?.lubricentroId || !lubricentro) {
       setError('No se encontró información del lubricentro');
       return;
@@ -128,18 +159,47 @@ const UserProfilePage: React.FC = () => {
       setUpdatingLogo(true);
       setError(null);
       
-      // Actualizar solo la URL del logo
-      await updateLubricentro(userProfile.lubricentroId, { logoUrl: imageUrl });
+      // Actualizar inmediatamente el estado local para mostrar la nueva imagen
+      setLubricentro(prev => prev ? { 
+        ...prev, 
+        logoUrl: logoData.url,
+        logoBase64: logoData.base64
+      } : null);
       
-      // Actualizar el estado local
-      setLubricentro(prev => prev ? { ...prev, logoUrl: imageUrl } : null);
-      setLubricentroFormData(prev => ({ ...prev, logoUrl: imageUrl }));
+      // Actualizar también el formulario local
+      setLubricentroFormData(prev => ({ 
+        ...prev, 
+        logoUrl: logoData.url 
+      }));
       
-      setSuccess('Logo del lubricentro actualizado correctamente');
+      // Actualizar en Firestore
+      updateLubricentro(userProfile.lubricentroId, { 
+        logoUrl: logoData.url,
+        logoBase64: logoData.base64
+      })
+        .then(() => {
+          setSuccess('Logo del lubricentro actualizado correctamente');
+          
+          // Recargar datos para asegurar consistencia
+          if (userProfile.lubricentroId) {
+            return getLubricentroById(userProfile.lubricentroId);
+          }
+          return null;
+        })
+        .then((updatedLubricentro) => {
+          if (updatedLubricentro) {
+            setLubricentro(updatedLubricentro);
+          }
+          setUpdatingLogo(false);
+        })
+        .catch((err) => {
+          console.error('Error al actualizar el logo:', err);
+          setError('Error al actualizar el logo del lubricentro');
+          setUpdatingLogo(false);
+        });
     } catch (err) {
-      console.error('Error al actualizar el logo:', err);
-      setError('Error al actualizar el logo del lubricentro');
-    } finally {
+      console.error('Error al procesar logo:', err);
+      setError('Error al procesar el logo del lubricentro');
       setUpdatingLogo(false);
     }
   };
@@ -273,16 +333,7 @@ const UserProfilePage: React.FC = () => {
               <CardBody>
                 <ImageUploader 
                   currentImageUrl={formData.photoURL}
-                  onImageUploaded={(imageData) => {
-                    // Si imageData es un string (versión antigua)
-                    if (typeof imageData === 'string') {
-                      setFormData(prev => ({ ...prev, photoURL: imageData }));
-                    } 
-                    // Si imageData es un objeto (nueva versión)
-                    else {
-                      setFormData(prev => ({ ...prev, photoURL: (imageData as { url: string }).url }));
-                    }
-                  }}
+                  onImageUploaded={handleImageUploaded}
                   className="py-4"
                 />
               </CardBody>
@@ -403,221 +454,194 @@ const UserProfilePage: React.FC = () => {
       
       {/* Perfil de lubricentro */}
       {activeTab === 'lubricentro' && lubricentro && (
-  <div className="space-y-6">
-    {/* Logo del Lubricentro */}
-    <Card className="mb-6">
-      <CardHeader 
-        title="Logo del Lubricentro" 
-        subtitle="Este logo aparecerá en los PDFs y documentos generados"
-      />
-      <CardBody>
-        <div className="flex flex-col items-center md:flex-row md:space-x-8">
-          <div className="w-full md:w-1/2 mb-4 md:mb-0">
-            <LogoUploader 
-              currentLogoUrl={lubricentro?.logoUrl}
-              onLogoUploaded={(logoData: { url: string, base64: string }) => {
-                // Actualizar el logo del lubricentro
-                if (userProfile?.lubricentroId) {
-                  setUpdatingLogo(true);
-                  
-                  // Guardar la URL y base64 en el estado
-                  setLubricentro(prev => prev ? { 
-                    ...prev, 
-                    logoUrl: logoData.url,
-                    logoBase64: logoData.base64
-                  } : null);
-                  
-                  // También actualizamos los datos en Firestore
-                  updateLubricentro(userProfile.lubricentroId, { 
-                    logoUrl: logoData.url,
-                    logoBase64: logoData.base64
-                  })
-                    .then(() => {
-                      setSuccess('Logo del lubricentro actualizado correctamente');
-                      setUpdatingLogo(false);
-                    })
-                    .catch((err) => {
-                      console.error('Error al actualizar el logo:', err);
-                      setError('Error al actualizar el logo del lubricentro');
-                      setUpdatingLogo(false);
-                    });
-                }
-              }}
-              className="py-4"
+        <div className="space-y-6">
+          {/* Logo del Lubricentro */}
+          <Card className="mb-6">
+            <CardHeader 
+              title="Logo del Lubricentro" 
+              subtitle="Este logo aparecerá en los PDFs y documentos generados"
             />
-            {updatingLogo && (
-              <div className="mt-2 text-center">
-                <Spinner size="sm" color="primary" />
-                <p className="text-sm text-gray-500 mt-1">Actualizando logo...</p>
+            <CardBody>
+              <div className="flex flex-col items-center md:flex-row md:space-x-8">
+                <div className="w-full md:w-1/2 mb-4 md:mb-0">
+                  <LogoUploader 
+                    currentLogoUrl={lubricentro?.logoUrl ? `${lubricentro.logoUrl}?t=${Date.now()}` : lubricentro?.logoBase64}
+                    onLogoUploaded={handleLogoUploaded}
+                    className="py-4"
+                  />
+                  {updatingLogo && (
+                    <div className="mt-2 text-center">
+                      <Spinner size="sm" color="primary" />
+                      <p className="text-sm text-gray-500 mt-1">Actualizando logo...</p>
+                    </div>
+                  )}
+                </div>
+                <div className="w-full md:w-1/2">
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">¿Por qué es importante el logo?</h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      El logo de tu lubricentro aparecerá en todos los documentos generados por el sistema,
+                      incluyendo los comprobantes de cambio de aceite, reportes y mensajes compartidos.
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Recomendaciones:
+                    </p>
+                    <ul className="text-sm text-gray-600 list-disc list-inside mb-3">
+                      <li>Utiliza una imagen con fondo transparente (PNG)</li>
+                      <li>Tamaño recomendado: 500x200 píxeles</li>
+                      <li>Mantén un tamaño de archivo menor a 2MB</li>
+                    </ul>
+                    <p className="text-sm text-gray-600">
+                      Una vez subido, el logo se mostrará automáticamente en todos los PDFs generados.
+                    </p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-          <div className="w-full md:w-1/2">
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h4 className="text-sm font-medium text-gray-900 mb-2">¿Por qué es importante el logo?</h4>
-              <p className="text-sm text-gray-600 mb-3">
-                El logo de tu lubricentro aparecerá en todos los documentos generados por el sistema,
-                incluyendo los comprobantes de cambio de aceite, reportes y mensajes compartidos.
-              </p>
-              <p className="text-sm text-gray-600">
-                Recomendaciones:
-              </p>
-              <ul className="text-sm text-gray-600 list-disc list-inside mb-3">
-                <li>Utiliza una imagen con fondo transparente (PNG)</li>
-                <li>Tamaño recomendado: 500x200 píxeles</li>
-                <li>Mantén un tamaño de archivo menor a 2MB</li>
-              </ul>
-              <p className="text-sm text-gray-600">
-                Una vez subido, el logo se mostrará automáticamente en todos los PDFs generados.
-              </p>
-            </div>
-          </div>
-        </div>
-      </CardBody>
-    </Card>
+            </CardBody>
+          </Card>
 
-    {/* Información del Lubricentro */}
-    <Card>
-      <CardHeader 
-        title="Datos del Lubricentro" 
-        subtitle="Información general y de contacto"
-      />
-      <CardBody>
-        <form onSubmit={handleSubmitLubricentro} className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <Input
-              label="Nombre de Fantasía"
-              name="fantasyName"
-              value={lubricentroFormData.fantasyName}
-              onChange={handleLubricentroChange}
-              required
-              placeholder="Nombre comercial del lubricentro"
+          {/* Información del Lubricentro */}
+          <Card>
+            <CardHeader 
+              title="Datos del Lubricentro" 
+              subtitle="Información general y de contacto"
             />
-            
-            <Input
-              label="CUIT"
-              name="cuit"
-              value={lubricentroFormData.cuit}
-              onChange={handleLubricentroChange}
-              disabled={userProfile?.role !== 'superadmin'}
-              helperText={userProfile?.role !== 'superadmin' ? "Solo el Super Admin puede modificar el CUIT" : "Formato: XX-XXXXXXXX-X"}
-            />
-            
-            <Input
-              label="Responsable"
-              name="responsable"
-              value={lubricentroFormData.responsable}
-              onChange={handleLubricentroChange}
-              placeholder="Nombre del responsable legal"
-            />
-            
-            <Input
-              label="Correo Electrónico"
-              name="email"
-              type="email"
-              value={lubricentroFormData.email}
-              onChange={handleLubricentroChange}
-              placeholder="Email de contacto del lubricentro"
-            />
-            
-            <Input
-              label="Teléfono"
-              name="phone"
-              value={lubricentroFormData.phone}
-              onChange={handleLubricentroChange}
-              placeholder="Número de teléfono"
-            />
-          </div>
-          
-          <Input
-            label="Domicilio"
-            name="domicilio"
-            value={lubricentroFormData.domicilio}
-            onChange={handleLubricentroChange}
-            placeholder="Dirección completa del lubricentro"
-          />
-          
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              color="primary"
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Spinner size="sm" color="white" className="mr-2" />
-                  Guardando...
-                </>
-              ) : (
-                'Guardar Cambios'
-              )}
-            </Button>
-          </div>
-        </form>
-      </CardBody>
-    </Card>
+            <CardBody>
+              <form onSubmit={handleSubmitLubricentro} className="space-y-6">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <Input
+                    label="Nombre de Fantasía"
+                    name="fantasyName"
+                    value={lubricentroFormData.fantasyName}
+                    onChange={handleLubricentroChange}
+                    required
+                    placeholder="Nombre comercial del lubricentro"
+                  />
+                  
+                  <Input
+                    label="CUIT"
+                    name="cuit"
+                    value={lubricentroFormData.cuit}
+                    onChange={handleLubricentroChange}
+                    disabled={userProfile?.role !== 'superadmin'}
+                    helperText={userProfile?.role !== 'superadmin' ? "Solo el Super Admin puede modificar el CUIT" : "Formato: XX-XXXXXXXX-X"}
+                  />
+                  
+                  <Input
+                    label="Responsable"
+                    name="responsable"
+                    value={lubricentroFormData.responsable}
+                    onChange={handleLubricentroChange}
+                    placeholder="Nombre del responsable legal"
+                  />
+                  
+                  <Input
+                    label="Correo Electrónico"
+                    name="email"
+                    type="email"
+                    value={lubricentroFormData.email}
+                    onChange={handleLubricentroChange}
+                    placeholder="Email de contacto del lubricentro"
+                  />
+                  
+                  <Input
+                    label="Teléfono"
+                    name="phone"
+                    value={lubricentroFormData.phone}
+                    onChange={handleLubricentroChange}
+                    placeholder="Número de teléfono"
+                  />
+                </div>
+                
+                <Input
+                  label="Domicilio"
+                  name="domicilio"
+                  value={lubricentroFormData.domicilio}
+                  onChange={handleLubricentroChange}
+                  placeholder="Dirección completa del lubricentro"
+                />
+                
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    color="primary"
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <>
+                        <Spinner size="sm" color="white" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Guardar Cambios'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardBody>
+          </Card>
 
-    {/* Información adicional */}
-    <Card>
-      <CardHeader 
-        title="Información del Sistema" 
-        subtitle="Datos técnicos y de configuración"
-      />
-      <CardBody>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <p className="text-sm text-gray-500">Estado</p>
-            <p className="text-base font-medium capitalize">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                ${lubricentro.estado === 'activo' ? 'bg-green-100 text-green-800' : 
-                lubricentro.estado === 'trial' ? 'bg-yellow-100 text-yellow-800' : 
-                'bg-red-100 text-red-800'}`}
-              >
-                {lubricentro.estado === 'activo' ? 'Activo' : 
-                 lubricentro.estado === 'trial' ? 'En prueba' : 'Inactivo'}
-              </span>
-            </p>
-          </div>
-          
-          {lubricentro.estado === 'trial' && lubricentro.trialEndDate && (
-            <div>
-              <p className="text-sm text-gray-500">Fin del período de prueba</p>
-              <p className="text-base font-medium">
-                {new Date(lubricentro.trialEndDate).toLocaleDateString()}
-              </p>
-            </div>
-          )}
-          
-          <div>
-            <p className="text-sm text-gray-500">Prefijo de Ticket</p>
-            <p className="text-base font-medium">{lubricentro.ticketPrefix}</p>
-          </div>
-          
-          <div>
-            <p className="text-sm text-gray-500">ID del Lubricentro</p>
-            <p className="text-base font-medium">{lubricentro.id}</p>
-          </div>
-          
-          <div>
-            <p className="text-sm text-gray-500">Fecha de Registro</p>
-            <p className="text-base font-medium">
-              {new Date(lubricentro.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-          
-          {lubricentro.updatedAt && (
-            <div>
-              <p className="text-sm text-gray-500">Última Actualización</p>
-              <p className="text-base font-medium">
-                {new Date(lubricentro.updatedAt).toLocaleDateString()}
-              </p>
-            </div>
-          )}
+          {/* Información adicional */}
+          <Card>
+            <CardHeader 
+              title="Información del Sistema" 
+              subtitle="Datos técnicos y de configuración"
+            />
+            <CardBody>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <p className="text-sm text-gray-500">Estado</p>
+                  <p className="text-base font-medium capitalize">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                      ${lubricentro.estado === 'activo' ? 'bg-green-100 text-green-800' : 
+                      lubricentro.estado === 'trial' ? 'bg-yellow-100 text-yellow-800' : 
+                      'bg-red-100 text-red-800'}`}
+                    >
+                      {lubricentro.estado === 'activo' ? 'Activo' : 
+                       lubricentro.estado === 'trial' ? 'En prueba' : 'Inactivo'}
+                    </span>
+                  </p>
+                </div>
+                
+                {lubricentro.estado === 'trial' && lubricentro.trialEndDate && (
+                  <div>
+                    <p className="text-sm text-gray-500">Fin del período de prueba</p>
+                    <p className="text-base font-medium">
+                      {new Date(lubricentro.trialEndDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+                
+                <div>
+                  <p className="text-sm text-gray-500">Prefijo de Ticket</p>
+                  <p className="text-base font-medium">{lubricentro.ticketPrefix}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-500">ID del Lubricentro</p>
+                  <p className="text-base font-medium">{lubricentro.id}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-500">Fecha de Registro</p>
+                  <p className="text-base font-medium">
+                    {new Date(lubricentro.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                
+                {lubricentro.updatedAt && (
+                  <div>
+                    <p className="text-sm text-gray-500">Última Actualización</p>
+                    <p className="text-base font-medium">
+                      {new Date(lubricentro.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardBody>
+          </Card>
         </div>
-      </CardBody>
-    </Card>
-  </div>
-)}
+      )}
     </PageContainer>
   );
 };

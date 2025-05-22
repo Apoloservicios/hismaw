@@ -1,14 +1,17 @@
 // src/components/common/LogoUploader.tsx
-import React, { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent ,useEffect} from 'react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
 import { Spinner } from '../ui';
 import cloudinaryService from '../../services/cloudinaryService';
+
+
 
 interface LogoUploaderProps {
   currentLogoUrl?: string;
   onLogoUploaded: (logoData: { url: string, base64: string }) => void;
   className?: string;
 }
+
 
 const LogoUploader: React.FC<LogoUploaderProps> = ({ 
   currentLogoUrl, 
@@ -28,6 +31,15 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
     }
   };
   
+
+// En LogoUploader.tsx
+useEffect(() => {
+  // Actualizar el estado de previsualización cuando cambien las props
+  if (currentLogoUrl) {
+    setPreviewUrl(currentLogoUrl);
+  }
+}, [currentLogoUrl]);
+
   // Manejar selección de archivo
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,7 +95,7 @@ const LogoUploader: React.FC<LogoUploaderProps> = ({
         {previewUrl ? (
           <div className="w-64 h-32 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
             <img 
-              src={previewUrl} 
+              src={`${previewUrl}?t=${new Date().getTime()}`} 
               alt="Logo del lubricentro" 
               className="max-w-full max-h-full object-contain"
               style={{ maxHeight: '120px', maxWidth: '250px' }}

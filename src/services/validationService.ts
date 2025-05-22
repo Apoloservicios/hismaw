@@ -40,8 +40,8 @@ export const autocompleteOptions = {
   // Marcas de aceite
   marcasAceite: [
     'Bardahl', 'Castrol', 'Elf', 'Fuchs', 'Gulf', 'Havoline', 'Liqui Moly', 
-    'Mobil', 'Motul', 'Pennzoil', 'Petronas', 'Repsol', 'Shell', 'Sunoco', 
-    'Total', 'Valvoline', 'YPF'
+    'Mobil', "MOPAR" , 'Motul', 'Pennzoil', 'Petronas', 'Repsol', 'Shell', 'Sunoco', 
+    'Total', 'Valvoline', 'YPF' ,"Generico"
   ],
   
   // Viscosidad / SAE

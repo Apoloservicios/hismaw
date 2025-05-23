@@ -40,7 +40,13 @@ const HomePage: React.FC = () => {
           <nav className="relative max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6" aria-label="Global">
             <div className="flex items-center flex-1">
               <div className="flex items-center justify-between w-full md:w-auto">
-                <img src={hismaLogo} alt="HISMA - Historial de Mantenimiento" className="h-10" />
+                
+                                  <img
+                    src={hismaLogo}
+                    alt="HISMA - Historial de Mantenimiento"
+                    className="h-10 max-w-[150px] object-contain"
+                  />
+
               </div>
             </div>
             <div className="flex items-center space-x-4">

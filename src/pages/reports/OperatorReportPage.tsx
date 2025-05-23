@@ -9,199 +9,283 @@ import {
   CardBody, 
   Button, 
   Alert, 
-  Spinner, 
+  Spinner,
+  Input,
+  Select,
   Table,
   TableRow,
-  TableCell,
-  Badge
+  TableCell
 } from '../../components/ui';
-import { getUserById } from '../../services/userService';
-import { getOilChangesByOperator } from '../../services/oilChangeService';
-import { OilChange, User } from '../../types';
-import { DocumentArrowDownIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
+import { 
+  getUsersByLubricentro,
+  getUsersOperatorStats
+} from '../../services/userService';
+import { 
+  getOilChangesByOperator
+} from '../../services/oilChangeService';
+import { getLubricentroById } from '../../services/lubricentroService';
 import reportService from '../../services/reportService';
+import { User, OilChange, Lubricentro, OperatorStats } from '../../types';
 
-// Componente para mostrar el reporte detallado de un operador específico
+// Recharts para gráficos
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+
+// Iconos
+import {
+  ChevronLeftIcon,
+  UserIcon,
+  ChartBarIcon,
+  CalendarDaysIcon,
+  DocumentArrowDownIcon,
+  TableCellsIcon,
+  TrophyIcon,
+  ClockIcon
+} from '@heroicons/react/24/outline';
+
+// Colores para gráficos
+const COLORS = ['#4caf50', '#66bb6a', '#81c784', '#2196f3', '#64b5f6'];
+
 const OperatorReportPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { userProfile } = useAuth();
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   
   // Estados
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [operator, setOperator] = useState<User | null>(null);
-  const [oilChanges, setOilChanges] = useState<OilChange[]>([]);
-  const [dateRange, setDateRange] = useState<{start: Date, end: Date}>({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Primer día del mes
-    end: new Date() // Hoy
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Datos
+  const [operators, setOperators] = useState<User[]>([]);
+  const [selectedOperator, setSelectedOperator] = useState<User | null>(null);
+  const [operatorChanges, setOperatorChanges] = useState<OilChange[]>([]);
+  const [operatorStats, setOperatorStats] = useState<OperatorStats[]>([]);
+  const [lubricentro, setLubricentro] = useState<Lubricentro | null>(null);
+  
+  // Filtros
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
   });
   
-  // Estadísticas calculadas
-  const [stats, setStats] = useState({
-    total: 0,
-    averagePerDay: 0,
-    withFilters: 0,
-    withAdditives: 0
-  });
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>(id || 'todos');
   
-  // Cargar datos
+  // Cargar datos iniciales
   useEffect(() => {
-    if (id && userProfile?.lubricentroId) {
+    if (userProfile?.lubricentroId) {
+      loadInitialData();
+    }
+  }, [userProfile]);
+  
+  // Cargar datos cuando cambian los filtros
+  useEffect(() => {
+    if (userProfile?.lubricentroId && operators.length > 0) {
       loadOperatorData();
     }
-  }, [id, userProfile, dateRange]);
+  }, [selectedOperatorId, dateRange, operators]);
   
-  // Cargar datos del operador y sus cambios de aceite
-  const loadOperatorData = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      if (!id) {
-        setError('ID de operador no proporcionado');
+      if (!userProfile?.lubricentroId) {
+        setError('No se encontró información del lubricentro');
         return;
       }
       
-      // Obtener datos del operador
-      const operatorData = await getUserById(id);
-      setOperator(operatorData);
+      // Obtener datos del lubricentro
+      const lubricentroData = await getLubricentroById(userProfile.lubricentroId);
+      setLubricentro(lubricentroData);
       
-      // Obtener cambios de aceite realizados por el operador
-      const changes = await getOilChangesByOperator(
-        id, 
-        userProfile?.lubricentroId || '', 
-        dateRange.start, 
-        dateRange.end
-      );
-      setOilChanges(changes);
+      // Obtener operadores (usuarios activos del lubricentro)
+      const usersData = await getUsersByLubricentro(userProfile.lubricentroId);
+      const activeOperators = usersData.filter(user => user.estado === 'activo');
+      setOperators(activeOperators);
       
-      // Calcular estadísticas
-      if (changes.length > 0) {
-        // Total de días en el período
-        const days = Math.max(1, Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24)));
-        
-        // Contar cambios con filtros y aditivos
-        const withFilters = changes.filter(
-          c => c.filtroAceite || c.filtroAire || c.filtroHabitaculo || c.filtroCombustible
-        ).length;
-        
-        const withAdditives = changes.filter(
-          c => c.aditivo || c.refrigerante || c.diferencial || c.caja || c.engrase
-        ).length;
-        
-        setStats({
-          total: changes.length,
-          averagePerDay: parseFloat((changes.length / days).toFixed(1)),
-          withFilters,
-          withAdditives
-        });
+      // Si hay un ID específico en la URL, buscar ese operador
+      if (id && id !== 'todos') {
+        const operator = activeOperators.find(op => op.id === id);
+        if (operator) {
+          setSelectedOperator(operator);
+          setSelectedOperatorId(id);
+        }
       }
       
     } catch (err) {
-      console.error('Error al cargar datos del operador:', err);
+      console.error('Error al cargar datos iniciales:', err);
       setError('Error al cargar los datos. Por favor, intente nuevamente.');
     } finally {
       setLoading(false);
     }
   };
   
-  // Generar informe en PDF
-  const generatePdfReport = async () => {
-    if (!operator) return;
-    
+  const loadOperatorData = async () => {
     try {
-      // Esta función debería generar un PDF específico para el operador
-      // Usando el servicio de reportes
-      alert(`Generando reporte de ${operator.nombre} ${operator.apellido}`);
+      setError(null);
       
-      // Implementación mock - en un caso real, usaríamos el servicio adecuadamente
-      const mockStats = {
-        total: stats.total,
-        thisMonth: stats.total,
-        lastMonth: 0,
-        upcoming30Days: 0
-      };
+      if (!userProfile?.lubricentroId) return;
       
-      const mockOperatorStats = [{
-        operatorId: operator.id,
-        operatorName: `${operator.nombre} ${operator.apellido}`,
-        count: stats.total
-      }];
+      const startDate = new Date(dateRange.startDate);
+      const endDate = new Date(dateRange.endDate);
+      endDate.setHours(23, 59, 59, 999);
       
-      await reportService.generatePdfReport(
-        mockStats,
-        mockOperatorStats,
-        `Reporte de Operador: ${operator.nombre} ${operator.apellido}`,
-        `${dateRange.start.toLocaleDateString()} - ${dateRange.end.toLocaleDateString()}`
-      );
+      if (selectedOperatorId === 'todos') {
+        // Cargar estadísticas de todos los operadores
+        const stats = await getUsersOperatorStats(
+          userProfile.lubricentroId,
+          startDate,
+          endDate
+        );
+        setOperatorStats(stats);
+        setSelectedOperator(null);
+        setOperatorChanges([]);
+      } else {
+        // Cargar datos específicos del operador seleccionado
+        const operator = operators.find(op => op.id === selectedOperatorId);
+        setSelectedOperator(operator || null);
+        
+        if (operator) {
+          const changes = await getOilChangesByOperator(
+            selectedOperatorId,
+            userProfile.lubricentroId,
+            startDate,
+            endDate
+          );
+          setOperatorChanges(changes);
+          
+          // También obtener estadísticas comparativas
+          const stats = await getUsersOperatorStats(
+            userProfile.lubricentroId,
+            startDate,
+            endDate
+          );
+          setOperatorStats(stats);
+        }
+      }
       
     } catch (err) {
+      console.error('Error al cargar datos del operador:', err);
+      setError('Error al cargar los datos del operador.');
+    }
+  };
+  
+  // Generar reporte PDF del operador
+  const generateOperatorPDF = async () => {
+    if (!operatorStats || operatorStats.length === 0) {
+      setError('No hay datos suficientes para generar el reporte');
+      return;
+    }
+    
+    try {
+      setGenerating(true);
+      setError(null);
+      
+      const dateRangeText = `${new Date(dateRange.startDate).toLocaleDateString('es-ES')} - ${new Date(dateRange.endDate).toLocaleDateString('es-ES')}`;
+      
+      if (selectedOperator) {
+        // Reporte específico del operador
+        await reportService.generateOperatorReport(
+          selectedOperator,
+          operatorChanges,
+          lubricentro?.fantasyName || 'Lubricentro',
+          dateRangeText
+        );
+      } else {
+        // Reporte comparativo de todos los operadores
+        await reportService.exportOperatorStatsToExcel(
+          operatorStats,
+          lubricentro?.fantasyName || 'Lubricentro',
+          dateRangeText
+        );
+      }
+      
+      setSuccess('Reporte generado correctamente');
+    } catch (err) {
       console.error('Error al generar reporte:', err);
-      setError('Error al generar el reporte. Por favor, intente nuevamente.');
+      setError('Error al generar el reporte');
+    } finally {
+      setGenerating(false);
     }
   };
   
   // Exportar a Excel
-  const exportToExcel = () => {
-    if (!operator || oilChanges.length === 0) return;
-    
+  const exportToExcel = async () => {
     try {
-      // Implementación mock - en un caso real, prepararíamos los datos y usaríamos el servicio
-      alert(`Exportando datos de ${operator.nombre} ${operator.apellido} a Excel`);
+      setGenerating(true);
+      setError(null);
       
-      // Preparar datos para Excel
-      const data = oilChanges.map(change => ({
-        Numero: change.nroCambio,
-        Fecha: new Date(change.fecha).toLocaleDateString(),
-        Cliente: change.nombreCliente,
-        Vehiculo: `${change.marcaVehiculo} ${change.modeloVehiculo}`,
-        Dominio: change.dominioVehiculo,
-        Aceite: `${change.marcaAceite} ${change.tipoAceite} ${change.sae}`,
-        Filtros: change.filtroAceite || change.filtroAire || change.filtroHabitaculo || change.filtroCombustible ? 'Sí' : 'No',
-        Aditivos: change.aditivo || change.refrigerante || change.diferencial || change.caja || change.engrase ? 'Sí' : 'No'
-      }));
+      const dateRangeText = `${new Date(dateRange.startDate).toLocaleDateString('es-ES')} - ${new Date(dateRange.endDate).toLocaleDateString('es-ES')}`;
       
-      reportService.exportToExcel(data, `Cambios_${operator.nombre}_${operator.apellido}`);
+      await reportService.exportOperatorStatsToExcel(
+        operatorStats,
+        lubricentro?.fantasyName || 'Lubricentro',
+        dateRangeText
+      );
       
+      setSuccess('Datos exportados a Excel correctamente');
     } catch (err) {
-      console.error('Error al exportar a Excel:', err);
-      setError('Error al exportar a Excel. Por favor, intente nuevamente.');
+      console.error('Error al exportar:', err);
+      setError('Error al exportar los datos');
+    } finally {
+      setGenerating(false);
     }
   };
   
-  // Cambiar rango de fechas
-  const changeDateRange = (range: 'month' | 'quarter' | 'year' | 'all') => {
-    const today = new Date();
-    let start = new Date();
-    
-    switch (range) {
-      case 'month':
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        break;
-      case 'quarter':
-        const quarter = Math.floor(today.getMonth() / 3);
-        start = new Date(today.getFullYear(), quarter * 3, 1);
-        break;
-      case 'year':
-        start = new Date(today.getFullYear(), 0, 1);
-        break;
-      case 'all':
-        start = new Date(2000, 0, 1); // Una fecha suficientemente lejana
-        break;
+  // Preparar datos para gráficos
+  const chartData = React.useMemo(() => {
+    if (selectedOperator && operatorChanges.length > 0) {
+      // Datos mensuales del operador seleccionado
+      const grouped = operatorChanges.reduce((acc, change) => {
+        const month = new Date(change.fecha).toLocaleDateString('es-ES', { 
+          month: 'short', 
+          year: 'numeric' 
+        });
+        acc[month] = (acc[month] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      return Object.entries(grouped).map(([month, count]) => ({
+        month,
+        servicios: count
+      }));
     }
     
-    setDateRange({ start, end: today });
-  };
+    // Datos comparativos de todos los operadores
+    return operatorStats.map(stat => ({
+      operador: stat.operatorName,
+      servicios: stat.count
+    }));
+  }, [selectedOperator, operatorChanges, operatorStats]);
   
-  // Formatear fecha
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
+  const performanceData = React.useMemo(() => {
+    if (!operatorStats.length) return [];
+    
+    const total = operatorStats.reduce((sum, stat) => sum + stat.count, 0);
+    const average = total / operatorStats.length;
+    
+    return operatorStats.map(stat => ({
+      name: stat.operatorName,
+      servicios: stat.count,
+      promedio: average,
+      rendimiento: ((stat.count / average) * 100).toFixed(1)
+    }));
+  }, [operatorStats]);
   
   if (loading) {
     return (
@@ -211,45 +295,13 @@ const OperatorReportPage: React.FC = () => {
     );
   }
   
-  if (error || !operator) {
-    return (
-      <PageContainer title="Reporte de Operador">
-        <Alert type="error" className="mb-4">
-          {error || 'No se encontró información del operador'}
-        </Alert>
-        <Button
-          color="primary"
-          onClick={() => navigate('/reportes')}
-          icon={<ChevronLeftIcon className="h-5 w-5" />}
-        >
-          Volver a Reportes
-        </Button>
-      </PageContainer>
-    );
-  }
-  
   return (
     <PageContainer
-      title={`Reporte de Operador: ${operator.nombre} ${operator.apellido}`}
-      subtitle={`Período: ${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`}
-      action={
-        <div className="flex space-x-2">
-          <Button
-            color="secondary"
-            variant="outline"
-            icon={<DocumentArrowDownIcon className="h-5 w-5" />}
-            onClick={exportToExcel}
-          >
-            Exportar a Excel
-          </Button>
-          <Button
-            color="primary"
-            icon={<DocumentArrowDownIcon className="h-5 w-5" />}
-            onClick={generatePdfReport}
-          >
-            Generar PDF
-          </Button>
-        </div>
+      title="Reporte de Operadores"
+      subtitle={
+        selectedOperator 
+          ? `Análisis detallado de ${selectedOperator.nombre} ${selectedOperator.apellido}`
+          : "Análisis comparativo de rendimiento de operadores"
       }
     >
       {error && (
@@ -258,163 +310,393 @@ const OperatorReportPage: React.FC = () => {
         </Alert>
       )}
       
-      {/* Filtros */}
+      {success && (
+        <Alert type="success" className="mb-6" dismissible onDismiss={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      )}
+      
+      {/* Controles */}
       <Card className="mb-6">
+        <CardHeader title="Configuración del Reporte" />
         <CardBody>
-          <div className="flex items-center space-x-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Período
-              </label>
-              <div className="flex space-x-2">
-                <Button
-                  size="sm"
-                  color={dateRange.start.getMonth() === new Date().getMonth() ? 'primary' : 'secondary'}
-                  variant="outline"
-                  onClick={() => changeDateRange('month')}
-                >
-                  Este mes
-                </Button>
-                <Button
-                  size="sm"
-                  color="secondary"
-                  variant="outline"
-                  onClick={() => changeDateRange('quarter')}
-                >
-                  Este trimestre
-                </Button>
-                <Button
-                  size="sm"
-                  color="secondary"
-                  variant="outline"
-                  onClick={() => changeDateRange('year')}
-                >
-                  Este año
-                </Button>
-                <Button
-                  size="sm"
-                  color="secondary"
-                  variant="outline"
-                  onClick={() => changeDateRange('all')}
-                >
-                  Todo
-                </Button>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Select
+              name="operatorSelect"
+              label="Operador"
+              value={selectedOperatorId}
+              onChange={(e) => setSelectedOperatorId(e.target.value)}
+              options={[
+                { value: 'todos', label: 'Todos los Operadores' },
+                ...operators.map(op => ({
+                  value: op.id,
+                  label: `${op.nombre} ${op.apellido}`
+                }))
+              ]}
+            />
+            
+            <Input
+              name="startDate"
+              label="Fecha Inicio"
+              type="date"
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+            />
+            
+            <Input
+              name="endDate"
+              label="Fecha Fin"
+              type="date"
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+            />
+            
+            <div className="flex items-end gap-2">
+              <Button
+                color="primary"
+                onClick={loadOperatorData}
+                disabled={loading}
+                className="flex-1"
+              >
+                {loading ? <Spinner size="sm" color="white" className="mr-2" /> : null}
+                Actualizar
+              </Button>
+              
+              <Button
+                color="secondary"
+                variant="outline"
+                icon={<ChevronLeftIcon className="h-5 w-5" />}
+                onClick={() => navigate('/reportes')}
+                title="Volver al Centro de Reportes"
+              >
+                Volver
+              </Button>
             </div>
           </div>
         </CardBody>
       </Card>
       
-      {/* Datos del operador */}
-      <Card className="mb-6">
-        <CardHeader title="Información del Operador" />
-        <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="mb-4">
-                <p className="text-sm text-gray-500">Nombre</p>
-                <p className="text-base font-medium">{operator.nombre} {operator.apellido}</p>
+      {/* Estadísticas principales */}
+      {selectedOperator ? (
+        // Vista de operador específico
+        <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-blue-100 mr-4">
+                  <UserIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Servicios Realizados</p>
+                  <p className="text-2xl font-semibold text-gray-800">{operatorChanges.length}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Email</p>
-                <p className="text-base font-medium">{operator.email}</p>
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-green-100 mr-4">
+                  <CalendarDaysIcon className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Promedio Diario</p>
+                  <p className="text-2xl font-semibold text-gray-800">
+                    {operatorChanges.length > 0 ? (operatorChanges.length / Math.max(1, Math.ceil((new Date(dateRange.endDate).getTime() - new Date(dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24)))).toFixed(1) : '0'}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="mb-4">
-                <p className="text-sm text-gray-500">Rol</p>
-                <p className="text-base font-medium capitalize">
-                  {operator.role === 'admin' ? 'Administrador' : 'Usuario'}
-                </p>
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-purple-100 mr-4">
+                  <TrophyIcon className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Posición</p>
+                  <p className="text-2xl font-semibold text-gray-800">
+                    {operatorStats.findIndex(stat => stat.operatorId === selectedOperator.id) + 1}º
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Estado</p>
-                <Badge 
-                  color={operator.estado === 'activo' ? 'success' : 'warning'} 
-                  text={operator.estado}
-                />
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-yellow-100 mr-4">
+                  <ChartBarIcon className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">vs Promedio</p>
+                  <p className="text-2xl font-semibold text-gray-800">
+                    {operatorStats.length > 0 ? 
+                      (((operatorChanges.length / (operatorStats.reduce((sum, stat) => sum + stat.count, 0) / operatorStats.length)) - 1) * 100).toFixed(0) + '%'
+                      : '0%'
+                    }
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
+            </CardBody>
+          </Card>
+        </div>
+      ) : (
+        // Vista de todos los operadores
+        <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-blue-100 mr-4">
+                  <UserIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Operadores</p>
+                  <p className="text-2xl font-semibold text-gray-800">{operatorStats.length}</p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-green-100 mr-4">
+                  <ChartBarIcon className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Servicios</p>
+                  <p className="text-2xl font-semibold text-gray-800">
+                    {operatorStats.reduce((sum, stat) => sum + stat.count, 0)}
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-purple-100 mr-4">
+                  <TrophyIcon className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Mejor Operador</p>
+                  <p className="text-lg font-semibold text-gray-800">
+                    {operatorStats[0]?.operatorName || 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          
+          <Card>
+            <CardBody>
+              <div className="flex items-center">
+                <div className="rounded-full p-3 bg-yellow-100 mr-4">
+                  <CalendarDaysIcon className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Promedio por Operador</p>
+                  <p className="text-2xl font-semibold text-gray-800">
+                    {operatorStats.length > 0 ? 
+                      (operatorStats.reduce((sum, stat) => sum + stat.count, 0) / operatorStats.length).toFixed(1)
+                      : '0'
+                    }
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      )}
       
-      {/* Resumen de rendimiento */}
-      <Card className="mb-6">
-        <CardHeader title="Resumen de Rendimiento" />
-        <CardBody>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-sm font-medium text-green-700">Cambios Realizados</p>
-              <p className="text-3xl font-bold text-green-700 mt-2">{stats.total}</p>
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader 
+            title={selectedOperator ? "Servicios por Período" : "Comparativa de Operadores"} 
+          />
+          <CardBody>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey={selectedOperator ? "month" : "operador"} 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={70}
+                  />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar 
+                    dataKey="servicios" 
+                    name="Servicios" 
+                    fill="#4caf50" 
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm font-medium text-blue-700">Promedio Diario</p>
-              <p className="text-3xl font-bold text-blue-700 mt-2">{stats.averagePerDay}</p>
-            </div>
-            
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <p className="text-sm font-medium text-yellow-700">Con Filtros</p>
-              <p className="text-3xl font-bold text-yellow-700 mt-2">
-                {stats.withFilters} 
-                <span className="text-base ml-2">
-                  ({Math.round((stats.withFilters / stats.total) * 100) || 0}%)
-                </span>
-              </p>
-            </div>
-            
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <p className="text-sm font-medium text-purple-700">Con Aditivos</p>
-              <p className="text-3xl font-bold text-purple-700 mt-2">
-                {stats.withAdditives}
-                <span className="text-base ml-2">
-                  ({Math.round((stats.withAdditives / stats.total) * 100) || 0}%)
-                </span>
-              </p>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+        
+        {!selectedOperator && performanceData.length > 0 && (
+          <Card>
+            <CardHeader title="Rendimiento vs Promedio" />
+            <CardBody>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={performanceData} margin={{ bottom: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-45} 
+                      textAnchor="end" 
+                      height={70}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="servicios" name="Servicios Realizados" fill="#4caf50" />
+                    <Bar dataKey="promedio" name="Promedio General" fill="#ff9800" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+      </div>
       
-      {/* Listado de cambios de aceite */}
-      <Card>
-        <CardHeader
-          title="Cambios de Aceite Realizados"
-          subtitle={`Total: ${oilChanges.length} cambios`}
-        />
-        <CardBody>
-          {oilChanges.length > 0 ? (
-            <Table
-              headers={['Nº', 'Fecha', 'Cliente', 'Vehículo', 'Dominio', 'Servicios']}
-            >
-              {oilChanges.map((change) => (
-                <TableRow key={change.id}>
-                  <TableCell className="font-medium">{change.nroCambio}</TableCell>
-                  <TableCell>{formatDate(change.fecha)}</TableCell>
-                  <TableCell>{change.nombreCliente}</TableCell>
-                  <TableCell>{`${change.marcaVehiculo} ${change.modeloVehiculo}`}</TableCell>
-                  <TableCell>{change.dominioVehiculo}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {change.filtroAceite && <Badge color="info" text="Filtro Aceite" />}
-                      {change.filtroAire && <Badge color="info" text="Filtro Aire" />}
-                      {change.aditivo && <Badge color="warning" text="Aditivo" />}
-                      {/* Otros servicios pueden agregarse según sea necesario */}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Table>
+      {/* Tabla de detalles */}
+      {selectedOperator && operatorChanges.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader 
+            title="Últimos Servicios Realizados" 
+            subtitle={`${operatorChanges.length} servicios en el período seleccionado`}
+          />
+          <CardBody>
+            <div className="overflow-x-auto">
+              <Table headers={['Fecha', 'Nº Cambio', 'Cliente', 'Vehículo', 'Dominio', 'Km']}>
+                {operatorChanges.slice(0, 10).map((change) => (
+                  <TableRow key={change.id}>
+                    <TableCell>{new Date(change.fecha).toLocaleDateString('es-ES')}</TableCell>
+                    <TableCell className="font-medium">{change.nroCambio}</TableCell>
+                    <TableCell>{change.nombreCliente}</TableCell>
+                    <TableCell>{`${change.marcaVehiculo} ${change.modeloVehiculo}`}</TableCell>
+                    <TableCell>{change.dominioVehiculo}</TableCell>
+                    <TableCell>{change.kmActuales.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </Table>
+              
+              {operatorChanges.length > 10 && (
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-gray-500">
+                    Mostrando 10 de {operatorChanges.length} servicios
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+      
+      {/* Tabla de ranking de operadores */}
+      {!selectedOperator && operatorStats.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader title="Ranking de Operadores" />
+          <CardBody>
+            <div className="overflow-x-auto">
+              <Table headers={['Posición', 'Operador', 'Servicios', 'Porcentaje', 'Rendimiento']}>
+                {operatorStats.map((stat, index) => {
+                  const totalServices = operatorStats.reduce((sum, s) => sum + s.count, 0);
+                  const percentage = ((stat.count / totalServices) * 100).toFixed(1);
+                  const average = totalServices / operatorStats.length;
+                  const performance = ((stat.count / average) * 100).toFixed(0);
+                  
+                  return (
+                    <TableRow key={stat.operatorId}>
+                      <TableCell>
+                        <div className="flex items-center">
+                          {index === 0 && <TrophyIcon className="h-5 w-5 text-yellow-500 mr-2" />}
+                          <span className="font-medium">{index + 1}º</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{stat.operatorName}</TableCell>
+                      <TableCell>{stat.count}</TableCell>
+                      <TableCell>{percentage}%</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          parseFloat(performance) >= 100 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {performance}%
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </Table>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+      
+      {/* Acciones de exportación */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Button
+          color="primary"
+          size="lg"
+          fullWidth
+          icon={<DocumentArrowDownIcon className="h-5 w-5" />}
+          onClick={generateOperatorPDF}
+          disabled={generating}
+        >
+          {generating ? (
+            <>
+              <Spinner size="sm" color="white" className="mr-2" />
+              Generando...
+            </>
           ) : (
-            <div className="py-8 text-center">
-              <p className="text-gray-500">
-                No hay cambios de aceite registrados para este operador en el período seleccionado.
-              </p>
-            </div>
+            'Generar PDF'
           )}
-        </CardBody>
-      </Card>
+        </Button>
+        
+        <Button
+          color="success"
+          size="lg"
+          fullWidth
+          icon={<TableCellsIcon className="h-5 w-5" />}
+          onClick={exportToExcel}
+          disabled={generating}
+        >
+          {generating ? (
+            <>
+              <Spinner size="sm" color="white" className="mr-2" />
+              Exportando...
+            </>
+          ) : (
+            'Exportar Excel'
+          )}
+        </Button>
+        
+        <Button
+          color="info"
+          size="lg"
+          fullWidth
+          icon={<ChartBarIcon className="h-5 w-5" />}
+          onClick={() => navigate('/reportes')}
+        >
+          Otros Reportes
+        </Button>
+      </div>
     </PageContainer>
   );
 };

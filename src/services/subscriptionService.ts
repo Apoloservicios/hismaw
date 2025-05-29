@@ -6,18 +6,22 @@ import {
   getAllLubricentros
 } from './lubricentroService';
 import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../types/subscription';
+import { TRIAL_LIMITS } from '../config/constants';
 
-// Función para incrementar el contador de servicios mensuales
+// Función para incrementar el contador de servicios mensuales - ACTUALIZADA
 export const incrementServiceCount = async (lubricentroId: string): Promise<boolean> => {
   try {
     const lubricentro = await getLubricentroById(lubricentroId);
     
     // Si está en período de prueba, manejar límites específicos
     if (lubricentro.estado === 'trial') {
-      const trialLimit = 10;
+      const trialLimit = TRIAL_LIMITS.SERVICES; // ✅ Usar constante coherente (10)
       const currentServices = lubricentro.servicesUsedThisMonth || 0;
       
+      console.log(`🔍 Verificando límites de prueba: ${currentServices}/${trialLimit} servicios utilizados`);
+      
       if (currentServices >= trialLimit) {
+        console.log('❌ Límite de servicios de prueba alcanzado');
         return false; // Ha alcanzado el límite
       }
       
@@ -31,6 +35,7 @@ export const incrementServiceCount = async (lubricentroId: string): Promise<bool
         }
       });
       
+      console.log(`✅ Contador incrementado: ${currentServices + 1}/${trialLimit} servicios`);
       return true;
     }
     
@@ -51,12 +56,14 @@ export const incrementServiceCount = async (lubricentroId: string): Promise<bool
           }
         });
         
+        console.log(`✅ Servicio registrado (plan ilimitado): ${currentServices + 1} servicios este mes`);
         return true;
       } else {
         // Plan con límite
         const currentServices = lubricentro.servicesUsedThisMonth || 0;
         
         if (currentServices >= plan.maxMonthlyServices) {
+          console.log(`❌ Límite mensual alcanzado: ${currentServices}/${plan.maxMonthlyServices}`);
           return false; // Ha alcanzado el límite
         }
         
@@ -69,11 +76,13 @@ export const incrementServiceCount = async (lubricentroId: string): Promise<bool
           }
         });
         
+        console.log(`✅ Servicio registrado: ${currentServices + 1}/${plan.maxMonthlyServices} servicios`);
         return true;
       }
     }
     
     // Por defecto, no permitir si no está en trial o activo
+    console.log(`❌ Lubricentro no autorizado para registrar servicios (estado: ${lubricentro.estado})`);
     return false;
   } catch (error) {
     console.error('Error al incrementar contador de servicios:', error);
@@ -201,14 +210,14 @@ export const recordPayment = async (
   }
 };
 
-// Función para verificar si se pueden agregar más usuarios (nueva función)
+// Función para verificar si se pueden agregar más usuarios - ACTUALIZADA
 export const canAddMoreUsers = async (lubricentroId: string, currentUserCount: number): Promise<boolean> => {
   try {
     const lubricentro = await getLubricentroById(lubricentroId);
     
     // Si está en período de prueba
     if (lubricentro.estado === 'trial') {
-      return currentUserCount < 2; // Máximo 2 usuarios en prueba
+      return currentUserCount < TRIAL_LIMITS.USERS; // ✅ Usar constante coherente (2)
     }
     
     // Si tiene suscripción activa
@@ -311,5 +320,45 @@ export const resetMonthlyCounters = async (): Promise<void> => {
   } catch (error) {
     console.error('Error al reiniciar contadores mensuales:', error);
     throw error;
+  }
+};
+
+// Nueva función para obtener información de límites de manera coherente
+export const getSubscriptionLimits = async (lubricentroId: string) => {
+  try {
+    const lubricentro = await getLubricentroById(lubricentroId);
+    
+    if (lubricentro.estado === 'trial') {
+      return {
+        maxUsers: TRIAL_LIMITS.USERS,
+        maxServices: TRIAL_LIMITS.SERVICES,
+        currentUsers: lubricentro.activeUserCount || 0,
+        currentServices: lubricentro.servicesUsedThisMonth || 0,
+        daysRemaining: Math.max(0, Math.ceil(
+          (new Date(lubricentro.trialEndDate || new Date()).getTime() - new Date().getTime()) 
+          / (1000 * 60 * 60 * 24)
+        )),
+        planName: 'Período de Prueba',
+        isUnlimited: false
+      };
+    }
+    
+    if (lubricentro.estado === 'activo' && lubricentro.subscriptionPlan) {
+      const plan = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan];
+      return {
+        maxUsers: plan.maxUsers,
+        maxServices: plan.maxMonthlyServices,
+        currentUsers: lubricentro.activeUserCount || 0,
+        currentServices: lubricentro.servicesUsedThisMonth || 0,
+        daysRemaining: null,
+        planName: plan.name,
+        isUnlimited: plan.maxMonthlyServices === null
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error al obtener límites de suscripción:', error);
+    return null;
   }
 };

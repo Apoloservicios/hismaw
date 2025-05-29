@@ -36,13 +36,194 @@ import {
   ArrowDownIcon,
   CalendarDaysIcon,
   BuildingOfficeIcon,
-  ClockIcon
+  ClockIcon,
+  WrenchIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../../types/subscription';
 
 // Colores para gráficos
 const COLORS = ['#4caf50', '#66bb6a', '#81c784', '#a5d6a7', '#c8e6c9'];
+
+// Componente para mostrar información del período de prueba
+const TrialInfoCard: React.FC<{ lubricentro: Lubricentro; stats: OilChangeStats }> = ({ lubricentro, stats }) => {
+  const getDaysRemaining = (endDate: Date | undefined | null): number => {
+    if (!endDate) return 0;
+    
+    try {
+      const end = new Date(endDate);
+      const now = new Date();
+      const diffTime = end.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return diffDays > 0 ? diffDays : 0;
+    } catch (error) {
+      console.error("Error calculando días restantes:", error);
+      return 0;
+    }
+  };
+
+  const getServicesRemaining = (): number => {
+    const trialLimit = 10;
+    const servicesUsed = lubricentro.servicesUsedThisMonth || 0;
+    return Math.max(0, trialLimit - servicesUsed);
+  };
+
+  const getProgressPercentage = (): number => {
+    const trialLimit = 10;
+    const servicesUsed = lubricentro.servicesUsedThisMonth || 0;
+    return Math.min(100, (servicesUsed / trialLimit) * 100);
+  };
+
+  if (lubricentro.estado !== 'trial') {
+    return null;
+  }
+
+  const daysRemaining = getDaysRemaining(lubricentro.trialEndDate);
+  const servicesRemaining = getServicesRemaining();
+  const progressPercentage = getProgressPercentage();
+  const isExpiring = daysRemaining <= 2;
+  const isLimitReached = servicesRemaining === 0;
+
+  return (
+    <Card className={`mb-6 ${isExpiring || isLimitReached ? 'border-orange-200 bg-orange-50' : 'border-blue-200 bg-blue-50'}`}>
+      <CardHeader 
+        title="Período de Prueba Gratuita" 
+        subtitle="Información sobre tu período de evaluación"
+      />
+      <CardBody>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Días restantes */}
+          <div className={`p-4 rounded-lg ${isExpiring ? 'bg-orange-100' : 'bg-blue-100'}`}>
+            <div className="flex items-center">
+              <ClockIcon className={`h-6 w-6 mr-2 ${isExpiring ? 'text-orange-600' : 'text-blue-600'}`} />
+              <div>
+                <h3 className={`font-medium ${isExpiring ? 'text-orange-700' : 'text-blue-700'}`}>
+                  Días Restantes
+                </h3>
+                <p className={`text-2xl font-bold ${isExpiring ? 'text-orange-800' : 'text-blue-800'}`}>
+                  {daysRemaining}
+                </p>
+                {isExpiring && daysRemaining > 0 && (
+                  <p className="text-sm text-orange-600 mt-1">
+                    ¡Tu prueba expira pronto!
+                  </p>
+                )}
+                {daysRemaining === 0 && (
+                  <p className="text-sm text-red-600 mt-1">
+                    ¡Período de prueba expirado!
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Servicios disponibles */}
+          <div className={`p-4 rounded-lg ${isLimitReached ? 'bg-orange-100' : 'bg-green-100'}`}>
+            <div className="flex items-center">
+              <WrenchIcon className={`h-6 w-6 mr-2 ${isLimitReached ? 'text-orange-600' : 'text-green-600'}`} />
+              <div>
+                <h3 className={`font-medium ${isLimitReached ? 'text-orange-700' : 'text-green-700'}`}>
+                  Servicios Disponibles
+                </h3>
+                <p className={`text-2xl font-bold ${isLimitReached ? 'text-orange-800' : 'text-green-800'}`}>
+                  {servicesRemaining}
+                </p>
+                <p className={`text-sm ${isLimitReached ? 'text-orange-600' : 'text-green-600'} mt-1`}>
+                  de 10 en total
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Progreso de uso */}
+          <div className="p-4 rounded-lg bg-gray-100">
+            <div className="flex items-center mb-2">
+              <ChartBarIcon className="h-6 w-6 mr-2 text-gray-600" />
+              <div>
+                <h3 className="font-medium text-gray-700">Uso del Período</h3>
+                <p className="text-2xl font-bold text-gray-800">
+                  {progressPercentage.toFixed(0)}%
+                </p>
+              </div>
+            </div>
+            <div className="mt-2 bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full ${progressPercentage >= 80 ? 'bg-orange-500' : progressPercentage >= 60 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              {lubricentro.servicesUsedThisMonth || 0} servicios utilizados
+            </p>
+          </div>
+        </div>
+
+        {/* Mensajes de advertencia y acciones */}
+        {(isExpiring || isLimitReached) && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start">
+              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mt-0.5 mr-3" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-yellow-800">
+                  {isLimitReached ? 'Límite de Servicios Alcanzado' : 'Período de Prueba por Vencer'}
+                </h4>
+                <div className="mt-2 text-sm text-yellow-700">
+                  {isLimitReached && (
+                    <p className="mb-2">
+                      Has utilizado todos los servicios disponibles durante tu período de prueba. Para continuar registrando cambios de aceite, necesitas activar tu suscripción.
+                    </p>
+                  )}
+                  {isExpiring && !isLimitReached && (
+                    <p className="mb-2">
+                      Tu período de prueba vence en {daysRemaining} día{daysRemaining !== 1 ? 's' : ''}. Activa tu suscripción para continuar utilizando el sistema sin interrupciones.
+                    </p>
+                  )}
+                  <p>
+                    Nuestro equipo está listo para ayudarte a elegir el plan que mejor se adapte a tus necesidades.
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <Button
+                    size="sm"
+                    color="warning"
+                    onClick={() => window.location.href = 'mailto:soporte@hisma.com.ar?subject=Activar%20suscripción%20-%20' + encodeURIComponent(lubricentro.fantasyName)}
+                  >
+                    Contactar Soporte
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    color="warning"
+                    onClick={() => window.open('https://wa.me/5491112345678?text=' + encodeURIComponent(`Hola, necesito activar la suscripción para ${lubricentro.fantasyName}`))}
+                  >
+                    WhatsApp
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Información adicional para período de prueba activo */}
+        {!isExpiring && !isLimitReached && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">
+              ¡Aprovecha tu Período de Prueba!
+            </h4>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• Explora todas las funcionalidades del sistema</li>
+              <li>• Registra hasta 10 cambios de aceite sin costo</li>
+              <li>• Genera reportes y estadísticas de tu lubricentro</li>
+              <li>• Contacta a soporte si tienes alguna pregunta</li>
+            </ul>
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+};
 
 // Dashboard Selector - Selecciona el dashboard a mostrar según el rol
 const DashboardPage: React.FC = () => {
@@ -161,22 +342,24 @@ const OwnerDashboard: React.FC = () => {
       return 'Fecha inválida';
     }
   };
+
   // Añade esta función en la parte superior del componente o antes de los componentes
-const getDaysRemaining = (endDate: Date | undefined | null): number => {
-  if (!endDate) return 0;
-  
-  try {
-    const end = new Date(endDate);
-    const now = new Date();
-    const diffTime = end.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const getDaysRemaining = (endDate: Date | undefined | null): number => {
+    if (!endDate) return 0;
     
-    return diffDays > 0 ? diffDays : 0;
-  } catch (error) {
-    console.error("Error calculando días restantes:", error);
-    return 0;
-  }
-};
+    try {
+      const end = new Date(endDate);
+      const now = new Date();
+      const diffTime = end.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return diffDays > 0 ? diffDays : 0;
+    } catch (error) {
+      console.error("Error calculando días restantes:", error);
+      return 0;
+    }
+  };
+  
   // Calcular diferencia porcentual
   const calculatePercentChange = (current: number, previous: number): number => {
     if (previous === 0) return current > 0 ? 100 : 0;
@@ -214,6 +397,9 @@ const getDaysRemaining = (endDate: Date | undefined | null): number => {
       title={`Dashboard de ${lubricentro.fantasyName}`}
       subtitle={`Bienvenido, ${userProfile?.nombre} ${userProfile?.apellido}`}
     >
+      {/* Información del período de prueba */}
+      <TrialInfoCard lubricentro={lubricentro} stats={stats} />
+
       {/* Tarjetas de estadísticas */}
       <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -414,131 +600,96 @@ const getDaysRemaining = (endDate: Date | undefined | null): number => {
           </CardBody>
         </Card>
         
-      
-
-          {/* Tarjeta de Suscripción */}
-          <Card className="mb-6">
-            <CardHeader 
-              title="Mi Suscripción" 
-              subtitle="Información de tu plan actual"
-            />
-            <CardBody>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-primary-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-primary-700">Plan Actual</h3>
-                  <p className="text-xl font-bold text-primary-800">
-                    {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.name 
-                      ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].name
-                      : lubricentro?.estado === 'trial' 
-                        ? 'Período de Prueba' 
-                        : 'Plan Básico'}
+        {/* Tarjeta de Suscripción */}
+        <Card className="mb-6">
+          <CardHeader 
+            title="Mi Suscripción" 
+            subtitle="Información de tu plan actual"
+          />
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-primary-50 p-4 rounded-lg">
+                <h3 className="font-medium text-primary-700">Plan Actual</h3>
+                <p className="text-xl font-bold text-primary-800">
+                  {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.name 
+                    ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].name
+                    : lubricentro?.estado === 'trial' 
+                      ? 'Período de Prueba' 
+                      : 'Plan Básico'}
+                </p>
+                {lubricentro?.estado === 'trial' && lubricentro?.trialEndDate ? (
+                  <p className="text-sm text-primary-600 mt-1">
+                    Prueba hasta: {formatDate(lubricentro.trialEndDate)}
+                    <br />
+                    {getDaysRemaining(lubricentro.trialEndDate) > 0 
+                      ? `(${getDaysRemaining(lubricentro.trialEndDate)} días restantes)` 
+                      : '(Expirado)'}
                   </p>
-                  {lubricentro?.estado === 'trial' && lubricentro?.trialEndDate ? (
-                    <p className="text-sm text-primary-600 mt-1">
-                      Prueba hasta: {formatDate(lubricentro.trialEndDate)}
-                      <br />
-                      {getDaysRemaining(lubricentro.trialEndDate) > 0 
-                        ? `(${getDaysRemaining(lubricentro.trialEndDate)} días restantes)` 
-                        : '(Expirado)'}
-                    </p>
-                  ) : lubricentro?.subscriptionEndDate ? (
-                    <p className="text-sm text-primary-600 mt-1">
-                      Válido hasta: {formatDate(lubricentro.subscriptionEndDate)}
-                    </p>
-                  ) : null}
+                ) : lubricentro?.subscriptionEndDate ? (
+                  <p className="text-sm text-primary-600 mt-1">
+                    Válido hasta: {formatDate(lubricentro.subscriptionEndDate)}
+                  </p>
+                ) : null}
+              </div>
+              
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium text-blue-700">Usuarios</h3>
+                <div className="flex items-baseline">
+                  <p className="text-xl font-bold text-blue-800">
+                    {users?.length || 0}
+                  </p>
+                  <p className="text-sm text-blue-600 ml-1">
+                    / {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]
+                        ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers
+                        : '2'}
+                  </p>
                 </div>
-                
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-blue-700">Usuarios</h3>
-                  <div className="flex items-baseline">
-                    <p className="text-xl font-bold text-blue-800">
-                      {users?.length || 0}
-                    </p>
-                    <p className="text-sm text-blue-600 ml-1">
-                      / {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]
-                          ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers
-                          : '2'}
-                    </p>
-                  </div>
+                <div className="mt-2 bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full" 
+                    style={{ 
+                      width: `${Math.min(100, ((users?.length || 0) / (lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan] 
+                        ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
+                        : 2)) * 100)}%` 
+                    }}
+                  ></div>
+                </div>
+                <p className="text-xs text-blue-600 mt-1">
+                  Usuarios permitidos según tu plan
+                </p>
+              </div>
+              
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-medium text-green-700">Servicios Mensuales</h3>
+                <div className="flex items-baseline">
+                  <p className="text-xl font-bold text-green-800">
+                    {stats?.thisMonth || 0}
+                  </p>
+                  <p className="text-sm text-green-600 ml-1">
+                    / {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.maxMonthlyServices === null
+                        ? '∞'
+                        : lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]
+                          ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices
+                          : '10'}
+                  </p>
+                </div>
+                {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.maxMonthlyServices !== null && (
                   <div className="mt-2 bg-gray-200 rounded-full h-2">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full" 
+                      className="bg-green-600 h-2 rounded-full" 
                       style={{ 
-                        width: `${Math.min(100, ((users?.length || 0) / (lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan] 
-                          ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
-                          : 2)) * 100)}%` 
+                        width: `${Math.min(100, ((stats?.thisMonth || 0) / (SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices || 1)) * 100)}%` 
                       }}
                     ></div>
                   </div>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Usuarios permitidos según tu plan
-                  </p>
-                </div>
-                
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-green-700">Servicios Mensuales</h3>
-                  <div className="flex items-baseline">
-                    <p className="text-xl font-bold text-green-800">
-                      {stats?.thisMonth || 0}
-                    </p>
-                    <p className="text-sm text-green-600 ml-1">
-                      / {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.maxMonthlyServices === null
-                          ? '∞'
-                          : lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]
-                            ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices
-                            : '50'}
-                    </p>
-                  </div>
-                  {lubricentro?.subscriptionPlan && SUBSCRIPTION_PLANS?.[lubricentro.subscriptionPlan]?.maxMonthlyServices !== null && (
-                    <div className="mt-2 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full" 
-                        style={{ 
-                          width: `${Math.min(100, ((stats?.thisMonth || 0) / (SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices || 1)) * 100)}%` 
-                        }}
-                      ></div>
-                    </div>
-                  )}
-                  <p className="text-xs text-green-600 mt-1">
-                    Cambios de aceite registrados este mes
-                  </p>
-                </div>
+                )}
+                <p className="text-xs text-green-600 mt-1">
+                  Cambios de aceite registrados este mes
+                </p>
               </div>
-              
-              {lubricentro?.estado === 'trial' && lubricentro?.trialEndDate && (
-                <div className="mt-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0">
-                      <ClockIcon className="h-5 w-5 text-yellow-400" />
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">Período de Prueba</h3>
-                      <div className="mt-2 text-sm text-yellow-700">
-                        <p>
-                          Tu período de prueba finaliza el {formatDate(lubricentro.trialEndDate)}.
-                          {getDaysRemaining(lubricentro.trialEndDate) > 0 
-                            ? ` Quedan ${getDaysRemaining(lubricentro.trialEndDate)} días.` 
-                            : ' Ha expirado.'}
-                        </p>
-                      </div>
-                      <div className="mt-3">
-                        <Button
-                          size="sm"
-                          color="warning"
-                          onClick={() => window.location.href = 'mailto:soporte@hisma.com.ar?subject=Activar%20suscripción'}
-                        >
-                          Contactar a soporte para activar mi cuenta
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardBody>
-          </Card>
-
-
-
+            </div>
+          </CardBody>
+        </Card>
       </div>
       
       {/* Botones de acción */}
@@ -586,9 +737,6 @@ const getDaysRemaining = (endDate: Date | undefined | null): number => {
     </PageContainer>
   );
 };
-
-
-
 
 // Dashboard para empleados (user)
 const UserDashboard: React.FC = () => {
@@ -866,6 +1014,7 @@ const UserDashboard: React.FC = () => {
     </PageContainer>
   );
 };
+
 // Dashboard para superadmin
 const SuperAdminDashboard: React.FC = () => {
   const { userProfile } = useAuth();
@@ -1167,10 +1316,10 @@ const SuperAdminDashboard: React.FC = () => {
                               'bg-red-100 text-red-800'}`}
                           >
                             {lub.estado === 'activo' ? 'Activo' : 
-                             lub.estado === 'trial' ? 'En Prueba' : 
-                             'Inactivo'}
+                            lub.estado === 'trial' ? 'En Prueba' : 
+                            'Inactivo'}
                           </span>
-                        </td>
+                          </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(lub.createdAt)}
                         </td>

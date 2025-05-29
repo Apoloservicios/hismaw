@@ -5,8 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { Alert, Button, Spinner } from '../../components/ui';
 import { getActiveLubricentros, createLubricentro } from '../../services/lubricentroService';
 import { Lubricentro, LubricentroStatus } from '../../types';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+
 // Iconos
 import { EnvelopeIcon, LockClosedIcon, UserIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
@@ -126,6 +127,12 @@ const RegisterPage: React.FC = () => {
       return false;
     }
 
+    // Validar longitud de contraseña
+    if (formData.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return false;
+    }
+
     // Validar datos adicionales para lubricentro
     if (registerType === 'lubricentro') {
       if (!formData.fantasyName || !formData.responsable || !formData.domicilio || !formData.cuit || !formData.phone) {
@@ -156,7 +163,7 @@ const RegisterPage: React.FC = () => {
     return true;
   };
   
-  // Manejar envío del formulario
+  // Manejar envío del formulario - VERSIÓN COMPLETAMENTE CORREGIDA
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -167,18 +174,22 @@ const RegisterPage: React.FC = () => {
       setError(null);
       
       if (registerType === 'lubricentro') {
-        // 1. Registrar como dueño de lubricentro (admin)
+        console.log('🚀 Iniciando registro de lubricentro...');
+        
+        // 1. PRIMERO: Registrar el usuario admin
+        console.log('👤 Paso 1: Registrando usuario admin...');
         const adminId = await register(formData.email, formData.password, {
           nombre: formData.nombre,
           apellido: formData.apellido,
           role: 'admin',
-          estado: 'activo', // Estado activo para dueños
+          estado: 'activo',
+          lubricentroId: undefined // Usar undefined en lugar de null
         });
         
-        // 2. Crear el lubricentro
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 días de prueba
+        console.log('✅ Usuario admin creado con ID:', adminId);
         
+        // 2. SEGUNDO: Crear el lubricentro con el adminId
+        console.log('🏢 Paso 2: Creando lubricentro...');
         const lubricentroData = {
           fantasyName: formData.fantasyName,
           responsable: formData.responsable,
@@ -186,26 +197,35 @@ const RegisterPage: React.FC = () => {
           cuit: formData.cuit,
           phone: formData.phone,
           email: formData.email,
-          estado: 'trial' as LubricentroStatus, // Usar casting explícito aquí
+          estado: 'trial' as LubricentroStatus,
           ticketPrefix: formData.ticketPrefix,
-          ownerId: adminId,
-          location: {},
-          trialEndDate: trialEndDate
+          ownerId: adminId, // Usar el ID del admin recién creado
+          location: {}
         };
         
-        const lubricentroId = await createLubricentro(lubricentroData);
+        const lubricentroId = await createLubricentro(lubricentroData, adminId);
+        console.log('✅ Lubricentro creado con ID:', lubricentroId);
         
-        // 3. Actualizar el usuario con el ID del lubricentro
-        if (adminId && lubricentroId) {
-          await updateDoc(doc(db, 'usuarios', adminId), {
-            lubricentroId: lubricentroId
-          });
-        }
+        // 3. TERCERO: Actualizar el usuario con el lubricentroId
+        console.log('🔄 Paso 3: Actualizando usuario con lubricentroId...');
+        await updateDoc(doc(db, 'usuarios', adminId), {
+          lubricentroId: lubricentroId,
+          updatedAt: serverTimestamp()
+        });
+        console.log('✅ Usuario actualizado con lubricentroId:', lubricentroId);
+        
+        // 4. Pequeña pausa para sincronización
+        console.log('⏳ Esperando sincronización...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log('🎉 Registro completado exitosamente!');
         
         // Redirigir a página de éxito
         navigate('/registro-exitoso');
+        
       } else {
         // Registrar como empleado
+        console.log('👥 Registrando empleado...');
         await register(formData.email, formData.password, {
           nombre: formData.nombre,
           apellido: formData.apellido,
@@ -214,20 +234,25 @@ const RegisterPage: React.FC = () => {
           lubricentroId: selectedLubricentroId,
         });
         
+        console.log('✅ Empleado registrado exitosamente');
+        
         // Redirigir a página de solicitud pendiente
         navigate('/registro-pendiente');
       }
     } catch (err: any) {
-      console.error('Error al registrar:', err);
-      
+      console.error('❌ Error durante el registro:', err);
       
       // Manejar distintos tipos de errores
       if (err.code === 'auth/email-already-in-use') {
         setError('Este correo electrónico ya está registrado');
       } else if (err.code === 'auth/weak-password') {
         setError('La contraseña es demasiado débil. Debe tener al menos 6 caracteres');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('El formato del correo electrónico no es válido');
+      } else if (err.message?.includes('Missing or insufficient permissions')) {
+        setError('Error de permisos. Verifique las reglas de Firebase o contacte al administrador.');
       } else {
-        setError(`Error al registrar: ${err.message}`);
+        setError(`Error al registrar: ${err.message || 'Error desconocido'}`);
       }
     } finally {
       setLoading(false);
@@ -255,6 +280,7 @@ const RegisterPage: React.FC = () => {
                 ? 'bg-primary-600 text-white' 
                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
             onClick={() => handleRegisterTypeChange('lubricentro')}
+            disabled={loading}
           >
             Registrar Lubricentro
           </button>
@@ -265,6 +291,7 @@ const RegisterPage: React.FC = () => {
                 ? 'bg-primary-600 text-white' 
                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
             onClick={() => handleRegisterTypeChange('empleado')}
+            disabled={loading}
           >
             Registrar como Empleado
           </button>
@@ -298,6 +325,7 @@ const RegisterPage: React.FC = () => {
                 onChange={handleChange}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -318,6 +346,7 @@ const RegisterPage: React.FC = () => {
                 onChange={handleChange}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -340,6 +369,7 @@ const RegisterPage: React.FC = () => {
               className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
               placeholder="nombre@ejemplo.com"
               required
+              disabled={loading}
             />
           </div>
         </div>
@@ -362,8 +392,10 @@ const RegisterPage: React.FC = () => {
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                 required
                 minLength={6}
+                disabled={loading}
               />
             </div>
+            <p className="mt-1 text-xs text-gray-500">Mínimo 6 caracteres</p>
           </div>
           
           <div>
@@ -382,6 +414,7 @@ const RegisterPage: React.FC = () => {
                 onChange={handleChange}
                 className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -408,6 +441,7 @@ const RegisterPage: React.FC = () => {
                   className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                   placeholder="Ej: Lubricentro ABC"
                   required={registerType === 'empleado'}
+                  disabled={loading}
                 />
               </div>
               
@@ -421,6 +455,7 @@ const RegisterPage: React.FC = () => {
                           type="button"
                           className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer"
                           onClick={() => handleSelectLubricentro(lub)}
+                          disabled={loading}
                         >
                           <div className="font-medium">{lub.fantasyName}</div>
                           <div className="text-gray-500 text-xs">{lub.domicilio}</div>
@@ -441,7 +476,7 @@ const RegisterPage: React.FC = () => {
               
               {selectedLubricentroId && (
                 <div className="mt-2 text-sm text-green-600">
-                  Lubricentro seleccionado correctamente
+                  ✓ Lubricentro seleccionado correctamente
                 </div>
               )}
             </div>
@@ -470,6 +505,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleChange}
                     className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
                     required={registerType === 'lubricentro'}
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -487,6 +523,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleChange}
                     className="focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     required={registerType === 'lubricentro'}
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -504,6 +541,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleChange}
                     className="focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     required={registerType === 'lubricentro'}
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -524,8 +562,12 @@ const RegisterPage: React.FC = () => {
                     maxLength={11}
                     pattern="\d{11}"
                     title="Ingrese los 11 dígitos del CUIT sin guiones"
+                    disabled={loading}
                   />
                 </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Ej: 20123456789
+                </p>
               </div>
               
               <div>
@@ -541,6 +583,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleChange}
                     className="focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     required={registerType === 'lubricentro'}
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -560,6 +603,7 @@ const RegisterPage: React.FC = () => {
                     required={registerType === 'lubricentro'}
                     maxLength={4}
                     minLength={2}
+                    disabled={loading}
                   />
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
@@ -582,9 +626,15 @@ const RegisterPage: React.FC = () => {
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Spinner size="sm" color="white" />
+                <span className="ml-2">
+                  {registerType === 'lubricentro' ? 'Creando lubricentro...' : 'Registrando usuario...'}
+                </span>
               </div>
-            ) : null}
-            <span className={loading ? 'opacity-0' : ''}>Registrarse</span>
+            ) : (
+              <span>
+                {registerType === 'lubricentro' ? 'Registrar Lubricentro' : 'Registrar como Empleado'}
+              </span>
+            )}
           </Button>
         </div>
       </form>
@@ -595,6 +645,19 @@ const RegisterPage: React.FC = () => {
           Iniciar Sesión
         </Link>
       </div>
+      
+      {/* Información adicional para período de prueba */}
+      {registerType === 'lubricentro' && (
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h4 className="text-sm font-medium text-blue-800 mb-2">
+            Período de Prueba Gratuita
+          </h4>
+          <p className="text-xs text-blue-700">
+            Al registrar su lubricentro, tendrá acceso a 7 días de prueba gratuita con hasta 10 cambios de aceite incluidos.
+            No se requiere tarjeta de crédito para comenzar.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

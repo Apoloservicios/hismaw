@@ -289,19 +289,20 @@ const LubricentroFormPage: React.FC = () => {
           trialEndDate.setDate(trialEndDate.getDate() + 7); // 7 días de prueba
           
           lubricentroId = await createLubricentro({
-            fantasyName: formData.fantasyName,
-            responsable: formData.responsable,
-            domicilio: formData.domicilio,
-            cuit: formData.cuit,
-            phone: formData.phone,
-            email: formData.email,
-            estado: 'trial', // Siempre comienza en período de prueba
-            ticketPrefix: formData.ticketPrefix,
-            logoUrl: formData.logoUrl,
-            ownerId: adminUserId,
-            location: {},
-            trialEndDate: trialEndDate
-          });
+  fantasyName: formData.fantasyName,
+  responsable: formData.responsable,
+  domicilio: formData.domicilio,
+  cuit: formData.cuit,
+  phone: formData.phone,
+  email: formData.email,
+  estado: 'trial', // Siempre comienza en período de prueba
+  ticketPrefix: formData.ticketPrefix,
+  logoUrl: formData.logoUrl,
+  ownerId: adminUserId, // Este campo se incluye en el objeto de datos
+  location: {},
+  trialEndDate: trialEndDate
+}, adminUserId); // ✅ AGREGAR: Pasar adminUserId como segundo parámetro
+
           
           // 3. Actualizar el usuario con el ID del lubricentro
           if (adminUserId && lubricentroId) {

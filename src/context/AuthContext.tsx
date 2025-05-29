@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   sendPasswordResetEmail,
+  sendEmailVerification,
   onAuthStateChanged,
   setPersistence, 
   browserLocalPersistence
@@ -14,17 +15,19 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
 
-// En AuthContext.tsx, modifica la interfaz
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   userProfile: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, userData: Partial<User>) => Promise<string>; // Cambiado a Promise<string>
+  register: (email: string, password: string, userData: Partial<User>) => Promise<string>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (userData: Partial<User>) => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuth() {
@@ -45,11 +48,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   // Función para obtener el perfil de usuario desde Firestore
-  const fetchUserProfile = async (uid: string) => {
+  const fetchUserProfile = async (uid: string): Promise<User | null> => {
     try {
       const userDoc = await getDoc(doc(db, 'usuarios', uid));
       if (userDoc.exists()) {
-        // Convertir Firestore timestamps a Date
         const data = userDoc.data();
         const userData: User = {
           ...data,
@@ -58,12 +60,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
           updatedAt: data.updatedAt?.toDate(),
         } as User;
         
-        setUserProfile(userData);
-      } else {
-        console.error('No se encontró el perfil de usuario');
+        return userData;
       }
+      return null;
     } catch (error) {
       console.error('Error al obtener el perfil de usuario:', error);
+      return null;
+    }
+  };
+
+  // Función para refrescar el perfil del usuario
+  const refreshUserProfile = async () => {
+    if (currentUser) {
+      try {
+        // Recargar el usuario de Firebase Auth para obtener el estado actualizado
+        await currentUser.reload();
+        
+        // Obtener el perfil actualizado de Firestore
+        const profile = await fetchUserProfile(currentUser.uid);
+        setUserProfile(profile);
+        
+        // Actualizar el currentUser en el estado
+        setCurrentUser({ ...currentUser });
+        
+        console.log('Perfil de usuario actualizado:', profile);
+      } catch (error) {
+        console.error('Error al refrescar perfil de usuario:', error);
+      }
     }
   };
 
@@ -71,23 +94,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     // Configurar persistencia
     setPersistence(auth, browserLocalPersistence);
-  
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user ? user.uid : 'No user');
       setCurrentUser(user);
+      
       if (user) {
         try {
-          // Primero verificamos si existe el documento
           const userDocRef = doc(db, 'usuarios', user.uid);
           const userDocSnap = await getDoc(userDocRef);
           
           if (userDocSnap.exists()) {
-            // Si existe, podemos obtener los datos y actualizar el último login
-            await fetchUserProfile(user.uid);
-            await updateDoc(userDocRef, {
-              lastLogin: serverTimestamp()
-            });
+            // Obtener perfil del usuario
+            const profile = await fetchUserProfile(user.uid);
+            setUserProfile(profile);
+            
+            console.log('Usuario cargado:', profile);
+            
+            // Solo actualizar último login si el perfil existe
+            if (profile) {
+              await updateDoc(userDocRef, {
+                lastLogin: serverTimestamp()
+              });
+            }
           } else {
-            // Si no existe, no hacemos nada por ahora o podemos manejar de otra forma
             console.warn(`Usuario autenticado pero sin documento en Firestore: ${user.uid}`);
             setUserProfile(null);
           }
@@ -100,7 +130,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       setLoading(false);
     });
-  
+
     return () => unsubscribe();
   }, []);
 
@@ -108,7 +138,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
+      console.log('Intentando iniciar sesión para:', email);
       await signInWithEmailAndPassword(auth, email, password);
+      console.log('Inicio de sesión exitoso');
     } catch (error) {
       console.error('Error al iniciar sesión:', error);
       throw error;
@@ -117,52 +149,73 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-// Función para registrar un nuevo usuario
-const register = async (email: string, password: string, userData: Partial<User>): Promise<string> => {
-  try {
-    setLoading(true);
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+  // Función para registrar un nuevo usuario - VERSIÓN CORREGIDA
+  const register = async (email: string, password: string, userData: Partial<User>): Promise<string> => {
+    try {
+      setLoading(true);
+      console.log('Registrando usuario:', email, userData);
+      
+      // 1. Crear usuario en Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('Usuario creado en Firebase Auth:', user.uid);
 
-    // Crear objeto base del usuario
-    const newUser: Partial<User> = {
-      id: user.uid,
-      nombre: userData.nombre || '',
-      apellido: userData.apellido || '',
-      email: user.email || '',
-      role: userData.role || 'user',
-      estado: userData.role === 'superadmin' ? 'activo' : userData.estado || 'pendiente',
-      lastLogin: new Date(),
-      createdAt: new Date()
-    };
+      // 2. Crear objeto del usuario sin timestamps complejos
+      const newUser = {
+        id: user.uid,
+        nombre: userData.nombre || '',
+        apellido: userData.apellido || '',
+        email: user.email || '',
+        role: userData.role || 'user',
+        estado: userData.role === 'superadmin' ? 'activo' : userData.estado || 'pendiente',
+        lubricentroId: userData.lubricentroId || null, // Puede ser null inicialmente
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp()
+      };
 
-    // Añadir lubricentroId solo si existe
-    if (userData.lubricentroId) {
-      newUser.lubricentroId = userData.lubricentroId;
+      console.log('Creando documento de usuario:', newUser);
+
+      // 3. Crear documento en Firestore
+      await setDoc(doc(db, 'usuarios', user.uid), newUser);
+      console.log('Documento de usuario creado en Firestore');
+      
+      // 4. Enviar email de verificación para dueños de lubricentro
+      if (userData.role === 'admin') {
+        try {
+          await sendEmailVerification(user);
+          console.log('Email de verificación enviado');
+        } catch (emailError) {
+          console.warn('Error al enviar email de verificación:', emailError);
+          // No lanzar error para no interrumpir el registro
+        }
+      }
+      
+      // 5. Actualizar el estado local - crear perfil sin timestamps de servidor
+      const createdUser = {
+        ...newUser,
+        createdAt: new Date(),
+        lastLogin: new Date()
+      } as User;
+      
+      setUserProfile(createdUser);
+      
+      console.log('Usuario registrado exitosamente:', user.uid);
+      return user.uid;
+    } catch (error) {
+      console.error('Error al registrar usuario:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    // Crear perfil en Firestore
-    await setDoc(doc(db, 'usuarios', user.uid), {
-      ...newUser,
-      lastLogin: serverTimestamp(),
-      createdAt: serverTimestamp()
-    });
-    
-    setUserProfile(newUser as User);
-    return user.uid; // Devolver el ID del usuario creado
-  } catch (error) {
-    console.error('Error al registrar usuario:', error);
-    throw error;
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Función para cerrar sesión
   const logout = async () => {
     try {
       setLoading(true);
+      console.log('Cerrando sesión');
       await signOut(auth);
+      console.log('Sesión cerrada exitosamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
       throw error;
@@ -174,9 +227,27 @@ const register = async (email: string, password: string, userData: Partial<User>
   // Función para restablecer contraseña
   const resetPassword = async (email: string) => {
     try {
+      console.log('Enviando correo de restablecimiento a:', email);
       await sendPasswordResetEmail(auth, email);
+      console.log('Correo de restablecimiento enviado');
     } catch (error) {
       console.error('Error al enviar correo de restablecimiento:', error);
+      throw error;
+    }
+  };
+
+  // Función para enviar email de verificación
+  const sendVerificationEmail = async () => {
+    try {
+      if (currentUser) {
+        console.log('Enviando email de verificación a:', currentUser.email);
+        await sendEmailVerification(currentUser);
+        console.log('Email de verificación enviado');
+      } else {
+        throw new Error('No hay usuario autenticado');
+      }
+    } catch (error) {
+      console.error('Error al enviar email de verificación:', error);
       throw error;
     }
   };
@@ -186,6 +257,8 @@ const register = async (email: string, password: string, userData: Partial<User>
     try {
       if (!currentUser) throw new Error('No hay usuario autenticado');
       
+      console.log('Actualizando perfil de usuario:', userData);
+      
       await updateDoc(doc(db, 'usuarios', currentUser.uid), {
         ...userData,
         updatedAt: serverTimestamp()
@@ -193,10 +266,12 @@ const register = async (email: string, password: string, userData: Partial<User>
       
       // Actualizar el estado local
       if (userProfile) {
-        setUserProfile({
+        const updatedProfile = {
           ...userProfile,
           ...userData
-        });
+        };
+        setUserProfile(updatedProfile);
+        console.log('Perfil actualizado localmente:', updatedProfile);
       }
     } catch (error) {
       console.error('Error al actualizar perfil:', error);
@@ -206,13 +281,15 @@ const register = async (email: string, password: string, userData: Partial<User>
 
   const value: AuthContextType = {
     currentUser,
-  userProfile,
-  loading,
-  login,
-  register,
-  logout,
-  resetPassword,
-  updateUserProfile
+    userProfile,
+    loading,
+    login,
+    register,
+    logout,
+    resetPassword,
+    updateUserProfile,
+    sendVerificationEmail,
+    refreshUserProfile
   };
 
   return (

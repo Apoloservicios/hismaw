@@ -60,11 +60,12 @@ const RecordPaymentModal: React.FC<{
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (lubricentro && lubricentro.subscriptionPlan) {
-      // Set default amount based on plan and renewal type
-      const planPrice = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].price;
-      const multiplier = lubricentro.subscriptionRenewalType === 'semiannual' ? 6 : 1;
-      setAmount(planPrice * multiplier);
+    if (lubricentro?.subscriptionPlan) {
+      const plan = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan];
+      const planPrice = lubricentro.subscriptionRenewalType === 'semiannual' 
+        ? plan.price.semiannual 
+        : plan.price.monthly;
+      setAmount(planPrice);
     }
   }, [lubricentro]);
 
@@ -207,14 +208,14 @@ const UpdateSubscriptionModal: React.FC<{
   lubricentro: Lubricentro | null;
   loading: boolean;
 }> = ({ isOpen, onClose, onConfirm, lubricentro, loading }) => {
-  const [plan, setPlan] = useState<SubscriptionPlanType>('starter');
+  const [plan, setPlan] = useState<SubscriptionPlanType>('basic');
   const [renewalType, setRenewalType] = useState<'monthly' | 'semiannual'>('monthly');
   const [autoRenewal, setAutoRenewal] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (lubricentro) {
-      setPlan(lubricentro.subscriptionPlan || 'starter');
+      setPlan(lubricentro.subscriptionPlan || 'basic');
       setRenewalType(lubricentro.subscriptionRenewalType || 'monthly');
       setAutoRenewal(lubricentro.autoRenewal !== false);
     }
@@ -231,9 +232,9 @@ const UpdateSubscriptionModal: React.FC<{
   if (!lubricentro) return null;
 
   // Calcular precio según plan y tipo de renovación
-  const calculatePrice = () => {
-    const basePrice = SUBSCRIPTION_PLANS[plan].price;
-    return renewalType === 'monthly' ? basePrice : basePrice * 6;
+  const calculatePrice = (): number => {
+    const planData = SUBSCRIPTION_PLANS[plan];
+    return renewalType === 'monthly' ? planData.price.monthly : planData.price.semiannual;
   };
 
   return (
@@ -289,7 +290,7 @@ const UpdateSubscriptionModal: React.FC<{
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Plan de Suscripción
           </label>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Object.entries(SUBSCRIPTION_PLANS).map(([planId, planData]) => (
               <div 
                 key={planId}
@@ -300,7 +301,7 @@ const UpdateSubscriptionModal: React.FC<{
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">{planData.name}</h3>
-                    <p className="text-sm text-gray-500">${planData.price.toLocaleString()} /mes</p>
+                    <p className="text-sm text-gray-500">${planData.price.monthly.toLocaleString()} /mes</p>
                   </div>
                   {plan === planId && (
                     <div className="rounded-full bg-primary-500 p-1">
@@ -481,33 +482,55 @@ const LubricentroSubscriptionPage: React.FC = () => {
     }
   };
   
+  // Función para calcular precio (definida a nivel del componente principal)
+  const calculatePrice = (plan: SubscriptionPlanType, renewalType: 'monthly' | 'semiannual'): number => {
+    const planData = SUBSCRIPTION_PLANS[plan];
+    return renewalType === 'monthly' ? planData.price.monthly : planData.price.semiannual;
+  };
+  
   // Manejar actualización de suscripción
   const handleUpdateSubscription = async (
     plan: SubscriptionPlanType,
     renewalType: 'monthly' | 'semiannual',
     autoRenewal: boolean
   ) => {
-    if (!id) return;
+    if (!lubricentro) {
+      setError('No se encontró la información del lubricentro');
+      return;
+    }
     
     try {
       setProcessing(true);
+      
+      // Calcular el monto a pagar
+      const paymentAmount = calculatePrice(plan, renewalType);
+      
+      // Actualizar la suscripción
       await updateSubscription(
-        id,
+        lubricentro.id,
         plan,
         renewalType,
-        autoRenewal,
-        'admin_update', // Método de pago genérico para actualizaciones desde el panel
-        `admin_update_${Date.now()}` // Referencia genérica con timestamp
+        autoRenewal
       );
+      
+      // Registrar el pago si hay un monto
+      if (paymentAmount > 0) {
+        await recordPayment(
+          lubricentro.id,
+          paymentAmount,
+          'admin_update',
+          `admin_update_${Date.now()}`
+        );
+      }
       
       // Recargar datos
       await loadData();
       
       setIsSubscriptionModalOpen(false);
       setSuccess('Suscripción actualizada correctamente');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al actualizar la suscripción:', err);
-      setError('Error al actualizar la suscripción');
+      setError(`Error al actualizar la suscripción: ${err.message}`);
     } finally {
       setProcessing(false);
     }
@@ -519,20 +542,23 @@ const LubricentroSubscriptionPage: React.FC = () => {
     method: string,
     reference: string
   ) => {
-    if (!id) return;
+    if (!lubricentro) {
+      setError('No se encontró la información del lubricentro');
+      return;
+    }
     
     try {
       setProcessing(true);
-      await recordPayment(id, amount, method, reference);
+      await recordPayment(lubricentro.id, amount, method, reference);
       
       // Recargar datos
       await loadData();
       
       setIsPaymentModalOpen(false);
       setSuccess('Pago registrado correctamente');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al registrar el pago:', err);
-      setError('Error al registrar el pago');
+      setError(`Error al registrar el pago: ${err.message}`);
     } finally {
       setProcessing(false);
     }
@@ -1046,7 +1072,7 @@ const LubricentroSubscriptionPage: React.FC = () => {
                       .map((payment, index) => (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(payment.date)}
+                            {formatDate(payment.date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ${payment.amount.toLocaleString()}
@@ -1122,13 +1148,13 @@ const LubricentroSubscriptionPage: React.FC = () => {
                           className="bg-primary-600 h-2.5 rounded-full" 
                           style={{ 
                             width: `${Math.min(100, ((lubricentro.servicesUsedThisMonth || 0) / 
-    (lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.maxMonthlyServices || 100)) * 100)}%`
+                              (lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.maxMonthlyServices || 100)) * 100)}%`
                           }}
                         ></div>
                       </div>
                       <p className="mt-1 text-xs text-gray-500">
-                      {Math.max(0, (lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.maxMonthlyServices || 0) - 
-    (lubricentro.servicesUsedThisMonth || 0))} servicios disponibles
+                        {Math.max(0, (lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.maxMonthlyServices || 0) - 
+                          (lubricentro.servicesUsedThisMonth || 0))} servicios disponibles
                       </p>
                     </div>
                   )}
@@ -1140,7 +1166,6 @@ const LubricentroSubscriptionPage: React.FC = () => {
                   </label>
                   <div className="mt-1 flex items-end">
                     <span className="text-3xl font-bold text-gray-900">
-                      {/* Este dato debería venir del backend como propiedad de lubricentro */}
                       {lubricentro.activeUserCount || 0}
                     </span>
                     {lubricentro.subscriptionPlan && (
@@ -1200,19 +1225,16 @@ const LubricentroSubscriptionPage: React.FC = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {Object.entries(lubricentro.servicesUsedHistory)
-                        .sort((a, b) => b[0].localeCompare(a[0])) // Ordenar por fecha (más reciente primero)
+                        .sort((a, b) => b[0].localeCompare(a[0]))
                         .map(([month, count]) => {
-                          // Convertir YYYY-MM a un nombre de mes
                           const [year, monthNum] = month.split('-');
                           const monthName = new Date(parseInt(year), parseInt(monthNum) - 1, 1)
                             .toLocaleDateString('es-ES', { month: 'long' });
                           
-                          // Límite mensual según el plan
                           const limit = lubricentro.subscriptionPlan 
                             ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices 
                             : null;
                           
-                          // Calcular porcentaje de utilización
                           const utilizationPercent = limit 
                             ? Math.min(100, (count / limit) * 100) 
                             : 0;
@@ -1266,7 +1288,6 @@ const LubricentroSubscriptionPage: React.FC = () => {
               )}
             </CardBody>
           </Card>
-          
         </div>
       )}
       

@@ -379,11 +379,17 @@ const LubricentroDetailPage: React.FC = () => {
       const autoRenewal = lubricentro?.autoRenewal !== false;
       
       // Llamar al servicio para actualizar la suscripción
+      if (!lubricentro) return;
       await updateSubscription(
-        id,
+        lubricentro.id,
         plan,
         renewalType,
-        autoRenewal,
+        autoRenewal
+      );
+      // Si necesitas registrar el cambio como pago, hazlo por separado:
+      await recordPayment(
+        lubricentro.id,
+        0, // Sin costo adicional por cambio de plan
         'admin_update',
         `plan_change_${Date.now()}`
       );

@@ -105,7 +105,6 @@ const App: React.FC = () => {
                 } 
               />
               
-              
               {/* Rutas de cambios de aceite */}
               <Route 
                 path="/cambios-aceite" 
@@ -119,7 +118,7 @@ const App: React.FC = () => {
               <Route 
                 path="/cambios-aceite/nuevo" 
                 element={
-                  <PrivateRoute>
+                  <PrivateRoute requiresActiveSubscription={true}>
                     <OilChangeFormPage />
                   </PrivateRoute>
                 } 
@@ -137,7 +136,7 @@ const App: React.FC = () => {
               <Route 
                 path="/cambios-aceite/editar/:id" 
                 element={
-                  <PrivateRoute>
+                  <PrivateRoute requiresActiveSubscription={true}>
                     <OilChangeFormPage />
                   </PrivateRoute>
                 } 
@@ -246,21 +245,16 @@ const App: React.FC = () => {
                 } 
               />
 
-               {/* Nueva ruta para gestión de suscripciones */}
-            <Route 
-              path="/superadmin/lubricentros/suscripcion/:id" 
-              element={
-                <PrivateRoute requiredRoles={['superadmin']}>
-                  <LubricentroSubscriptionPage />
-                </PrivateRoute>
-              } 
-            />
-
-
-
+              {/* Nueva ruta para gestión de suscripciones */}
+              <Route 
+                path="/superadmin/lubricentros/suscripcion/:id" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <LubricentroSubscriptionPage />
+                  </PrivateRoute>
+                } 
+              />
             </Route>
-
-           
             
             {/* Redirigir rutas desconocidas */}
             <Route path="*" element={<Navigate to="/" replace />} />

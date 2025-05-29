@@ -250,7 +250,7 @@ const HomePage: React.FC = () => {
                   Pensado para el inicio, empezá a olvidarte de las tarjetas físicas, digitaliza tus datos.
                 </p>
                 <p className="mt-8">
-                  <span className="text-4xl font-extrabold text-gray-900">$11.000</span>
+                  <span className="text-4xl font-extrabold text-gray-900">$13.500</span>
                   <span className="text-base font-medium text-gray-500">/mes</span>
                 </p>
                 <a
@@ -306,7 +306,7 @@ const HomePage: React.FC = () => {
                   Aumenta la capacidad de tu negocio con más usuarios y servicios mensuales.
                 </p>
                 <p className="mt-8">
-                  <span className="text-4xl font-extrabold text-gray-900">$18.500</span>
+                  <span className="text-4xl font-extrabold text-gray-900">$19.500</span>
                   <span className="text-base font-medium text-gray-500">/mes</span>
                 </p>
                 <a
@@ -356,7 +356,7 @@ const HomePage: React.FC = () => {
                   Acceso completo a todas las funcionalidades sin limitaciones de servicios.
                 </p>
                 <p className="mt-8">
-                  <span className="text-4xl font-extrabold text-gray-900">$23.500</span>
+                  <span className="text-4xl font-extrabold text-gray-900">$26.500</span>
                   <span className="text-base font-medium text-gray-500">/mes</span>
                 </p>
                 <a

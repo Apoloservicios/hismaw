@@ -6,19 +6,25 @@ import { SubscriptionPlanType } from './subscription';
 export type UserRole = 'superadmin' | 'admin' | 'user';
 export type UserStatus = 'activo' | 'inactivo' | 'pendiente';
 
+
+
 export interface User {
   id: string;
   nombre: string;
   apellido: string;
   email: string;
-  role: UserRole;
-  estado: UserStatus;
-  lubricentroId?: string;
-  lastLogin: Date | null;
+  role: 'superadmin' | 'admin' | 'user';
+  estado: 'activo' | 'inactivo' | 'pendiente';
+  lubricentroId?: string | null; // ✅ CORREGIDO: Ahora puede ser undefined o null
   createdAt: Date;
-  photoURL?: string;
+  lastLogin?: Date | null;
   updatedAt?: Date;
+  avatar?: string;
+  photoURL?: string;
+  permissions?: string[];
 }
+
+
 
 // Tipos de Lubricentro
 export type LubricentroStatus = 'activo' | 'inactivo' | 'trial';

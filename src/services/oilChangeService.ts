@@ -20,6 +20,7 @@ import {
 import { db } from '../lib/firebase';
 import { OilChange, OilChangeStats } from '../types';
 import { incrementServiceCount } from './subscriptionService';
+import { getLubricentroById, updateLubricentro } from './lubricentroService';
 
 const COLLECTION_NAME = 'cambiosAceite';
 
@@ -241,14 +242,58 @@ export const getOilChangesByVehicle = async (dominioVehiculo: string): Promise<O
   }
 };
 
-// Crear cambio de aceite
+// Crear cambio de aceite con validación de límites de prueba mejorada
 export const createOilChange = async (data: Omit<OilChange, 'id' | 'createdAt'>): Promise<string> => {
   try {
-    // Verificar límites de servicio según el plan de suscripción
-    const canCreateService = await incrementServiceCount(data.lubricentroId);
+    // Obtener información del lubricentro
+    const lubricentro = await getLubricentroById(data.lubricentroId);
     
-    if (!canCreateService) {
-      throw new Error('Has alcanzado el límite mensual de servicios según tu plan de suscripción. Contacta al administrador para actualizar tu plan.');
+    if (!lubricentro) {
+      throw new Error('No se encontró el lubricentro');
+    }
+
+    // Verificar estado del lubricentro
+    if (lubricentro.estado === 'inactivo') {
+      throw new Error('El lubricentro no tiene una suscripción activa. Contacte al administrador para activar su cuenta.');
+    }
+
+    // Verificar si el período de prueba ha expirado
+    if (lubricentro.estado === 'trial' && lubricentro.trialEndDate) {
+      const now = new Date();
+      const trialEnd = new Date(lubricentro.trialEndDate);
+      
+      if (trialEnd < now) {
+        throw new Error('El período de prueba ha expirado. Contacte al soporte para activar su suscripción.');
+      }
+    }
+
+    // Verificar límites durante el período de prueba
+    if (lubricentro.estado === 'trial') {
+      const trialServiceLimit = 10; // Límite de servicios en período de prueba
+      
+      // Contar servicios del mes actual
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const currentServices = lubricentro.servicesUsedThisMonth || 0;
+      
+      if (currentServices >= trialServiceLimit) {
+        throw new Error(`Has alcanzado el límite de ${trialServiceLimit} servicios durante el período de prueba. Contacta al soporte para activar tu suscripción y continuar registrando cambios de aceite.`);
+      }
+      
+      // Actualizar contador de servicios usados
+      await updateLubricentro(data.lubricentroId, {
+        servicesUsedThisMonth: currentServices + 1,
+        servicesUsedHistory: {
+          ...(lubricentro.servicesUsedHistory || {}),
+          [currentMonth]: ((lubricentro.servicesUsedHistory || {})[currentMonth] || 0) + 1
+        }
+      });
+    } else {
+      // Para lubricentros activos, verificar límites según plan de suscripción
+      const canCreateService = await incrementServiceCount(data.lubricentroId);
+      
+      if (!canCreateService) {
+        throw new Error('Has alcanzado el límite mensual de servicios según tu plan de suscripción. Contacta al administrador para actualizar tu plan.');
+      }
     }
     
     // Asegurarse de que el dominio del vehículo esté en mayúsculas
@@ -264,9 +309,9 @@ export const createOilChange = async (data: Omit<OilChange, 'id' | 'createdAt'>)
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...data,
       dominioVehiculo,
-      fechaServicio,  // Usar la fecha correctamente convertida
+      fechaServicio,
       fechaProximoCambio,
-      fecha: new Date(), // Asegurar que la fecha de registro es un Date
+      fecha: new Date(),
       createdAt: serverTimestamp()
     });
     

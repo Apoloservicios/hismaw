@@ -6,26 +6,18 @@ import {
   getDocs, 
   addDoc, 
   updateDoc, 
-  deleteDoc,
+  deleteDoc, 
   query, 
   where, 
   orderBy, 
   serverTimestamp,
-  Timestamp,
-  QueryConstraint,
-  limit,
-  startAfter,
-  DocumentData,
-  QueryDocumentSnapshot
+  limit
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 import { Lubricentro, LubricentroStatus } from '../types';
-import cloudinaryService from './cloudinaryService';
 
 const COLLECTION_NAME = 'lubricentros';
-
-
 
 // Convertir datos de Firestore a nuestro tipo Lubricentro
 const convertFirestoreLubricentro = (doc: any): Lubricentro => {
@@ -35,65 +27,128 @@ const convertFirestoreLubricentro = (doc: any): Lubricentro => {
     ...data,
     createdAt: data.createdAt?.toDate() || new Date(),
     trialEndDate: data.trialEndDate?.toDate(),
-    updatedAt: data.updatedAt?.toDate()
+    subscriptionStartDate: data.subscriptionStartDate?.toDate(),
+    subscriptionEndDate: data.subscriptionEndDate?.toDate(),
+    contractEndDate: data.contractEndDate?.toDate(),
+    billingCycleEndDate: data.billingCycleEndDate?.toDate(),
+    lastPaymentDate: data.lastPaymentDate?.toDate(),
+    nextPaymentDate: data.nextPaymentDate?.toDate(),
+    updatedAt: data.updatedAt?.toDate(),
+    paymentHistory: data.paymentHistory?.map((payment: any) => ({
+      ...payment,
+      date: payment.date?.toDate() || new Date()
+    })) || []
   } as Lubricentro;
 };
 
-
-// Subir logo del lubricentro
-// Subir logo del lubricentro
-export const uploadLubricentroLogo = async (
-  lubricentroId: string, 
-  file: File
+// Función para crear lubricentro - VERSIÓN SIMPLIFICADA Y CORREGIDA
+export const createLubricentro = async (
+  data: Omit<Lubricentro, 'id' | 'createdAt'>, 
+  ownerId: string
 ): Promise<string> => {
   try {
-    // Usar el servicio de Cloudinary para subir la imagen y obtener tanto URL como base64
-    const { url: imageUrl, base64 } = await cloudinaryService.uploadImage(file);
+    console.log('📝 Creando lubricentro con datos:', data);
+    console.log('👤 Owner ID:', ownerId);
     
-    // Actualizar URL y base64 en el documento del lubricentro
-    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
-      logoUrl: imageUrl,
-      logoBase64: base64,
-      updatedAt: serverTimestamp()
-    });
+    // Validar datos obligatorios
+    if (!data.fantasyName?.trim()) throw new Error('Nombre del lubricentro es obligatorio');
+    if (!data.responsable?.trim()) throw new Error('Responsable legal es obligatorio');
+    if (!data.domicilio?.trim()) throw new Error('Domicilio es obligatorio');
+    if (!data.cuit?.trim()) throw new Error('CUIT es obligatorio');
+    if (!data.phone?.trim()) throw new Error('Teléfono es obligatorio');
+    if (!data.email?.trim()) throw new Error('Email es obligatorio');
+    if (!data.ticketPrefix?.trim()) throw new Error('Prefijo de ticket es obligatorio');
+    if (!ownerId?.trim()) throw new Error('Owner ID es obligatorio');
     
-    return imageUrl;
+    // Calcular fecha de fin del período de prueba (7 días)
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 7);
+    
+    // Datos limpios y completos para Firestore
+    const lubricentroData = {
+      // Información básica
+      fantasyName: String(data.fantasyName).trim(),
+      responsable: String(data.responsable).trim(),
+      domicilio: String(data.domicilio).trim(),
+      cuit: String(data.cuit).trim().replace(/\D/g, ''), // Solo números
+      phone: String(data.phone).trim(),
+      email: String(data.email).trim().toLowerCase(),
+      ticketPrefix: String(data.ticketPrefix).trim().toUpperCase(),
+      
+      // Owner y estado
+      ownerId: String(ownerId).trim(),
+      estado: 'trial' as LubricentroStatus,
+      
+      // Fechas
+      trialEndDate: trialEndDate,
+      createdAt: serverTimestamp(),
+      
+      // Configuración inicial
+      location: data.location || {},
+      servicesUsedThisMonth: 0,
+      activeUserCount: 1,
+      servicesUsedHistory: {},
+      paymentHistory: [],
+      autoRenewal: false
+    };
+    
+    console.log('📤 Datos finales para Firestore:', lubricentroData);
+    
+    // Crear el documento
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), lubricentroData);
+    
+    console.log('✅ Lubricentro creado exitosamente con ID:', docRef.id);
+    return docRef.id;
+    
   } catch (error) {
-    console.error('Error al subir el logo:', error);
+    console.error('❌ Error al crear lubricentro:', error);
     throw error;
   }
 };
 
-// Eliminar logo del lubricentro
-export const deleteLubricentroLogo = async (lubricentroId: string): Promise<void> => {
+// Función para actualizar lubricentro
+export const updateLubricentro = async (id: string, data: Partial<Lubricentro>): Promise<void> => {
   try {
-    // Obtener el documento actual para ver si tiene logo
-    const docSnap = await getDoc(doc(db, COLLECTION_NAME, lubricentroId));
-    if (!docSnap.exists()) {
-      throw new Error('El lubricentro no existe');
-    }
+    const docRef = doc(db, COLLECTION_NAME, id);
     
-    const lubricentro = docSnap.data() as Lubricentro;
-    
-    // Si tiene logoUrl, intentar eliminar la imagen de Cloudinary
-    if (lubricentro.logoUrl) {
-      // En una implementación completa, también eliminaríamos la imagen de Cloudinary
-      // Esto requeriría configuración adicional y credenciales
-      console.log('Se debería eliminar la imagen de Cloudinary:', lubricentro.logoUrl);
-    }
-    
-    // Actualizar documento del lubricentro para quitar la URL
-    await updateDoc(doc(db, COLLECTION_NAME, lubricentroId), {
-      logoUrl: null,
+    // Crear objeto sin campos undefined
+    const updateData: any = {
       updatedAt: serverTimestamp()
+    };
+    
+    // Solo agregar campos que no sean undefined
+    Object.keys(data).forEach(key => {
+      const value = (data as any)[key];
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
     });
+    
+    console.log('Actualizando lubricentro con datos:', updateData);
+    
+    await updateDoc(docRef, updateData);
   } catch (error) {
-    console.error('Error al eliminar el logo:', error);
+    console.error('Error al actualizar el lubricentro:', error);
     throw error;
   }
 };
 
-// Obtener lubricentro por ID
+// Función para actualizar el estado de un lubricentro
+export const updateLubricentroStatus = async (id: string, estado: LubricentroStatus): Promise<void> => {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(docRef, {
+      estado,
+      updatedAt: serverTimestamp()
+    });
+    console.log(`Estado del lubricentro ${id} actualizado a: ${estado}`);
+  } catch (error) {
+    console.error('Error al actualizar el estado del lubricentro:', error);
+    throw error;
+  }
+};
+
+// Función para obtener lubricentro por ID
 export const getLubricentroById = async (id: string): Promise<Lubricentro> => {
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
@@ -110,209 +165,129 @@ export const getLubricentroById = async (id: string): Promise<Lubricentro> => {
   }
 };
 
-// Obtener todos los lubricentros
+// Función para obtener todos los lubricentros
 export const getAllLubricentros = async (): Promise<Lubricentro[]> => {
   try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
     
     return querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
   } catch (error) {
-    console.error('Error al obtener los lubricentros:', error);
+    console.error('Error al obtener lubricentros:', error);
     throw error;
   }
 };
 
-// Obtener lubricentros paginados
-export const getLubricentrosPaginated = async (
-  pageSize: number = 20,
-  lastVisible?: QueryDocumentSnapshot<DocumentData>,
-  status?: LubricentroStatus
-): Promise<{
-  lubricentros: Lubricentro[],
-  lastVisible: QueryDocumentSnapshot<DocumentData> | null
-}> => {
-  try {
-    let constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
-    
-    if (status) {
-      constraints.push(where('estado', '==', status));
-    }
-    
-    let q;
-    
-    if (lastVisible) {
-      q = query(
-        collection(db, COLLECTION_NAME),
-        ...constraints,
-        startAfter(lastVisible),
-        limit(pageSize)
-      );
-    } else {
-      q = query(
-        collection(db, COLLECTION_NAME),
-        ...constraints,
-        limit(pageSize)
-      );
-    }
-    
-    const querySnapshot = await getDocs(q);
-    
-    const lubricentros = querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
-    
-    const newLastVisible = querySnapshot.docs.length > 0 
-      ? querySnapshot.docs[querySnapshot.docs.length - 1] 
-      : null;
-    
-    return {
-      lubricentros,
-      lastVisible: newLastVisible
-    };
-  } catch (error) {
-    console.error('Error al obtener lubricentros paginados:', error);
-    throw error;
-  }
-};
-
-// Obtener lubricentros por propietario
-export const getLubricentrosByOwner = async (ownerId: string): Promise<Lubricentro[]> => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
-  } catch (error) {
-    console.error('Error al obtener los lubricentros del propietario:', error);
-    throw error;
-  }
-};
-
-// Obtener lubricentros activos y en período de prueba válido
+// Función para obtener lubricentros activos
 export const getActiveLubricentros = async (): Promise<Lubricentro[]> => {
   try {
-    // Obtener lubricentros activos
-    const qActive = query(
+    const q = query(
       collection(db, COLLECTION_NAME),
-      where('estado', '==', 'activo'),
-      orderBy('fantasyName', 'asc')
+      where('estado', 'in', ['activo', 'trial'])
     );
     
-    const activeSnapshot = await getDocs(qActive);
-    const activeLubricentros = activeSnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
+    const querySnapshot = await getDocs(q);
     
-    // Obtener lubricentros en período de prueba que aún no ha expirado
+    return querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
+  } catch (error) {
+    console.error('Error al obtener lubricentros activos:', error);
+    throw error;
+  }
+};
+
+// Función para eliminar lubricentro
+export const deleteLubricentro = async (id: string): Promise<void> => {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    
+    // Obtener datos del lubricentro antes de eliminar para limpiar archivos
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      
+      // Eliminar logo si existe
+      if (data.logoUrl) {
+        try {
+          const logoRef = ref(storage, `lubricentros/${id}/logo`);
+          await deleteObject(logoRef);
+        } catch (storageError) {
+          console.warn('Error al eliminar logo del storage:', storageError);
+        }
+      }
+    }
+    
+    await deleteDoc(docRef);
+    console.log(`Lubricentro ${id} eliminado`);
+  } catch (error) {
+    console.error('Error al eliminar el lubricentro:', error);
+    throw error;
+  }
+};
+
+// Función para subir logo del lubricentro
+export const uploadLubricentroLogo = async (
+  lubricentroId: string, 
+  file: File
+): Promise<string> => {
+  try {
+    // Crear referencia al archivo en Storage
+    const storageRef = ref(storage, `lubricentros/${lubricentroId}/logo`);
+    
+    // Subir archivo
+    const snapshot = await uploadBytes(storageRef, file);
+    
+    // Obtener URL de descarga
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    // Actualizar documento del lubricentro con la URL del logo
+    await updateLubricentro(lubricentroId, {
+      logoUrl: downloadURL
+    });
+    
+    console.log(`Logo subido para lubricentro ${lubricentroId}: ${downloadURL}`);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error al subir logo del lubricentro:', error);
+    throw error;
+  }
+};
+
+// Función para verificar y actualizar lubricentros con período de prueba vencido
+export const checkForExpiredTrials = async (): Promise<Lubricentro[]> => {
+  try {
     const now = new Date();
-    const qTrial = query(
+    
+    const q = query(
       collection(db, COLLECTION_NAME),
-      where('estado', '==', 'trial'),
-      where('trialEndDate', '>=', now),
-      orderBy('trialEndDate', 'asc')
+      where('estado', '==', 'trial')
     );
     
-    const trialSnapshot = await getDocs(qTrial);
-    const trialLubricentros = trialSnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
+    const querySnapshot = await getDocs(q);
+    const expiredLubricentros: Lubricentro[] = [];
     
-    // Combinar y retornar
-    return [...activeLubricentros, ...trialLubricentros];
+    for (const docSnap of querySnapshot.docs) {
+      const data = docSnap.data();
+      const trialEndDate = data.trialEndDate?.toDate();
+      
+      if (trialEndDate && trialEndDate < now) {
+        const lubricentro = convertFirestoreLubricentro(docSnap);
+        expiredLubricentros.push(lubricentro);
+        
+        // Actualizar el estado a inactivo
+        await updateDoc(doc(db, COLLECTION_NAME, docSnap.id), {
+          estado: 'inactivo',
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    
+    return expiredLubricentros;
   } catch (error) {
-    console.error('Error al obtener los lubricentros activos:', error);
+    console.error('Error al verificar lubricentros con periodo de prueba expirado:', error);
     throw error;
   }
 };
 
-// Crear lubricentro
-export const createLubricentro = async (data: Omit<Lubricentro, 'id' | 'createdAt'>): Promise<string> => {
-  try {
-    // Calcular fecha de fin del período de prueba (7 días)
-    const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 7);
-    
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-      ...data,
-      estado: 'trial', // Por defecto, comienza en período de prueba
-      createdAt: serverTimestamp(),
-      trialEndDate: trialEndDate
-    });
-    
-    return docRef.id;
-  } catch (error) {
-    console.error('Error al crear el lubricentro:', error);
-    throw error;
-  }
-};
-
-// Actualizar lubricentro
-export const updateLubricentro = async (id: string, data: Partial<Lubricentro>): Promise<void> => {
-  try {
-    const docRef = doc(db, COLLECTION_NAME, id);
-    
-    // Nunca actualizar el ID, createdAt u ownerId directamente
-    const { id: _, createdAt: __, ownerId: ___, ...updateData } = data;
-    
-    // Realizar validaciones
-    if (updateData.fantasyName && updateData.fantasyName.length < 3) {
-      throw new Error('El nombre del lubricentro debe tener al menos 3 caracteres');
-    }
-    
-    if (updateData.phone && !/^[\d\s()+.-]{7,20}$/.test(updateData.phone)) {
-      throw new Error('El número de teléfono no tiene un formato válido');
-    }
-    
-    if (updateData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updateData.email)) {
-      throw new Error('El correo electrónico no tiene un formato válido');
-    }
-    
-    if (updateData.cuit && !/^[0-9]{2}-[0-9]{8}-[0-9]$/.test(updateData.cuit)) {
-      throw new Error('El CUIT debe tener el formato XX-XXXXXXXX-X');
-    }
-    
-    await updateDoc(docRef, {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error al actualizar el lubricentro:', error);
-    throw error;
-  }
-};
-
-
-
-
-// Actualizar estado del lubricentro
-export const updateLubricentroStatus = async (id: string, estado: LubricentroStatus): Promise<void> => {
-  try {
-    const docRef = doc(db, COLLECTION_NAME, id);
-    
-    const updateData: any = {
-      estado,
-      updatedAt: serverTimestamp()
-    };
-    
-    // Si se cambia a "trial", establecer una nueva fecha de fin de prueba
-    if (estado === 'trial') {
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + 7);
-      updateData.trialEndDate = trialEndDate;
-    }
-    
-    await updateDoc(docRef, updateData);
-  } catch (error) {
-    console.error('Error al actualizar el estado del lubricentro:', error);
-    throw error;
-  }
-};
-
-// Extender período de prueba
+// Función para extender período de prueba (solo para superadmin)
 export const extendTrialPeriod = async (id: string, days: number): Promise<void> => {
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
@@ -333,90 +308,93 @@ export const extendTrialPeriod = async (id: string, days: number): Promise<void>
     await updateDoc(docRef, {
       estado: 'trial',
       trialEndDate: newTrialEnd,
+      // Reiniciar contador de servicios si se extiende el período
+      servicesUsedThisMonth: 0,
       updatedAt: serverTimestamp()
     });
+    
+    console.log(`Período de prueba extendido ${days} días para lubricentro ${id}`);
   } catch (error) {
     console.error('Error al extender el período de prueba:', error);
     throw error;
   }
 };
 
-// Verificar y actualizar lubricentros con período de prueba vencido
-export const checkForExpiredTrials = async (): Promise<Lubricentro[]> => {
+// Función para obtener estadísticas de uso durante el período de prueba
+export const getTrialUsageStats = async (lubricentroId: string): Promise<{
+  servicesUsed: number;
+  servicesLimit: number;
+  daysRemaining: number;
+  canCreateServices: boolean;
+}> => {
   try {
+    const lubricentro = await getLubricentroById(lubricentroId);
+    
+    if (lubricentro.estado !== 'trial') {
+      throw new Error('El lubricentro no está en período de prueba');
+    }
+    
+    const servicesLimit = 10; // Límite de servicios en período de prueba
+    const servicesUsed = lubricentro.servicesUsedThisMonth || 0;
+    
+    // Calcular días restantes
     const now = new Date();
+    const trialEnd = lubricentro.trialEndDate ? new Date(lubricentro.trialEndDate) : now;
+    const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
     
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('estado', '==', 'trial'),
-      where('trialEndDate', '<', now)
-    );
+    const canCreateServices = servicesUsed < servicesLimit && daysRemaining > 0;
     
-    const querySnapshot = await getDocs(q);
-    const expiredLubricentros = querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
-    
-    // Actualizar el estado de los lubricentros expirados
-    await Promise.all(
-      expiredLubricentros.map(async (lubricentro) => {
-        await updateDoc(doc(db, COLLECTION_NAME, lubricentro.id), {
-          estado: 'inactivo',
-          updatedAt: serverTimestamp()
-        });
-      })
-    );
-    
-    return expiredLubricentros;
+    return {
+      servicesUsed,
+      servicesLimit,
+      daysRemaining,
+      canCreateServices
+    };
   } catch (error) {
-    console.error('Error al verificar lubricentros con periodo de prueba expirado:', error);
+    console.error('Error al obtener estadísticas de uso de prueba:', error);
     throw error;
   }
 };
 
-// Buscar lubricentros
-export const searchLubricentros = async (
-  term: string, 
-  field: 'fantasyName' | 'responsable' | 'cuit' | 'email' = 'fantasyName',
-  maxResults: number = 10
-): Promise<Lubricentro[]> => {
+// Función para obtener lubricentros por estado
+export const getLubricentrosByStatus = async (estado: LubricentroStatus): Promise<Lubricentro[]> => {
   try {
-    // Firestore no soporta búsquedas de texto completo, así que hacemos búsqueda exacta
     const q = query(
       collection(db, COLLECTION_NAME),
-      where(field, '>=', term),
-      where(field, '<=', term + '\uf8ff'), // Truco para simular "startsWith"
-      orderBy(field),
-      limit(maxResults)
+      where('estado', '==', estado),
+      orderBy('createdAt', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
     
     return querySnapshot.docs.map(doc => convertFirestoreLubricentro(doc));
   } catch (error) {
-    console.error('Error al buscar lubricentros:', error);
+    console.error(`Error al obtener lubricentros con estado ${estado}:`, error);
     throw error;
   }
 };
 
-// Eliminar lubricentro
-export const deleteLubricentro = async (id: string): Promise<void> => {
+// Función para buscar lubricentros por nombre o CUIT
+export const searchLubricentros = async (searchTerm: string): Promise<Lubricentro[]> => {
   try {
-    // Eliminar el documento
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
+    const term = searchTerm.trim().toLowerCase();
     
-    // Eliminar logo si existe
-    try {
-      const storage = getStorage();
-      const logoRef = ref(storage, `lubricentros/${id}/logo`);
-      await deleteObject(logoRef);
-    } catch (error) {
-      // Ignorar errores si el logo no existe
-      console.log('No se encontró logo para eliminar o ya fue eliminado');
+    if (!term) {
+      return [];
     }
     
-    // Nota: En una implementación completa, se debería usar una función de Firebase Cloud Functions
-    // para eliminar también todos los usuarios y datos asociados al lubricentro
+    // Obtener todos los lubricentros y filtrar en el cliente
+    // (Firestore no soporta búsqueda de texto completo nativa)
+    const allLubricentros = await getAllLubricentros();
+    
+    return allLubricentros.filter(lub => 
+      lub.fantasyName.toLowerCase().includes(term) ||
+      lub.responsable.toLowerCase().includes(term) ||
+      lub.cuit.includes(term) ||
+      lub.email.toLowerCase().includes(term)
+    );
   } catch (error) {
-    console.error('Error al eliminar el lubricentro:', error);
+    console.error('Error al buscar lubricentros:', error);
     throw error;
   }
 };

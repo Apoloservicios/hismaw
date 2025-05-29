@@ -1,159 +1,162 @@
 // src/services/subscriptionService.ts
-import { Timestamp } from 'firebase/firestore';
-import { 
-  getLubricentroById, 
-  updateLubricentroStatus, 
+import { serverTimestamp } from 'firebase/firestore';
+import {
+  getLubricentroById,
   updateLubricentro,
-  getAllLubricentros 
+  getAllLubricentros
 } from './lubricentroService';
-import { getUsersByLubricentro } from './userService';
-import { 
-  Lubricentro, 
-  LubricentroStatus 
-} from '../types/lubricentro';
-import { 
-  SubscriptionPlanType, 
-  SUBSCRIPTION_PLANS 
-} from '../types/subscription';
+import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../types/subscription';
 
-/**
- * Verifica y actualiza el estado de todas las suscripciones
- * Devuelve los lubricentros con suscripciones expiradas y con pagos próximos
- */
-export const checkSubscriptionStatuses = async (): Promise<{
-  expired: Lubricentro[];
-  paymentDue: Lubricentro[];
-}> => {
+// Función para incrementar el contador de servicios mensuales
+export const incrementServiceCount = async (lubricentroId: string): Promise<boolean> => {
   try {
-    // Obtener todos los lubricentros
-    const lubricentros = await getAllLubricentros();
-    const now = new Date();
+    const lubricentro = await getLubricentroById(lubricentroId);
     
-    const expired: Lubricentro[] = [];
-    const paymentDue: Lubricentro[] = [];
-    
-    // Procesar cada lubricentro
-    await Promise.all(lubricentros.map(async (lub) => {
-      // Manejar expiración del período de prueba
-      if (lub.estado === 'trial' && lub.trialEndDate && lub.trialEndDate < now) {
-        // Período de prueba expirado, marcar como inactivo
-        await updateLubricentroStatus(lub.id, 'inactivo');
-        expired.push(lub);
-        return;
+    // Si está en período de prueba, manejar límites específicos
+    if (lubricentro.estado === 'trial') {
+      const trialLimit = 10;
+      const currentServices = lubricentro.servicesUsedThisMonth || 0;
+      
+      if (currentServices >= trialLimit) {
+        return false; // Ha alcanzado el límite
       }
       
-      // Manejar suscripciones pagas
-      if (lub.estado === 'activo' && lub.subscriptionEndDate) {
-        // Verificar si la suscripción ha expirado
-        if (lub.subscriptionEndDate < now) {
-          // Si la renovación automática está activada, intentar extender
-          if (lub.autoRenewal) {
-            // En un sistema real, aquí se activaría el procesamiento de pago
-            // Por ahora, solo marcar como pago pendiente
-            await updateLubricentro(lub.id, {
-              paymentStatus: 'pending',
-              nextPaymentDate: now
-            });
-            paymentDue.push(lub);
-          } else {
-            // Sin renovación automática, marcar como inactivo
-            await updateLubricentroStatus(lub.id, 'inactivo');
-            expired.push(lub);
+      // Incrementar contador
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      await updateLubricentro(lubricentroId, {
+        servicesUsedThisMonth: currentServices + 1,
+        servicesUsedHistory: {
+          ...(lubricentro.servicesUsedHistory || {}),
+          [currentMonth]: ((lubricentro.servicesUsedHistory || {})[currentMonth] || 0) + 1
+        }
+      });
+      
+      return true;
+    }
+    
+    // Si es un lubricentro activo con suscripción
+    if (lubricentro.estado === 'activo' && lubricentro.subscriptionPlan) {
+      const plan = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan];
+      
+      if (plan.maxMonthlyServices === null) {
+        // Plan ilimitado
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const currentServices = lubricentro.servicesUsedThisMonth || 0;
+        
+        await updateLubricentro(lubricentroId, {
+          servicesUsedThisMonth: currentServices + 1,
+          servicesUsedHistory: {
+            ...(lubricentro.servicesUsedHistory || {}),
+            [currentMonth]: ((lubricentro.servicesUsedHistory || {})[currentMonth] || 0) + 1
           }
-        }
-        // Verificar pagos próximos (7 días de anticipación)
-        else if (lub.nextPaymentDate && 
-                (lub.nextPaymentDate.getTime() - now.getTime()) < 7 * 24 * 60 * 60 * 1000) {
-          paymentDue.push(lub);
-        }
-      }
-      
-      // Reiniciar contador de servicios mensuales si estamos en un nuevo mes
-      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
-      const lastServiceMonth = Object.keys(lub.servicesUsedHistory || {}).sort().pop();
-      
-      if (lastServiceMonth && lastServiceMonth !== currentMonth) {
-        await updateLubricentro(lub.id, {
-          servicesUsedThisMonth: 0
         });
+        
+        return true;
+      } else {
+        // Plan con límite
+        const currentServices = lubricentro.servicesUsedThisMonth || 0;
+        
+        if (currentServices >= plan.maxMonthlyServices) {
+          return false; // Ha alcanzado el límite
+        }
+        
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        await updateLubricentro(lubricentroId, {
+          servicesUsedThisMonth: currentServices + 1,
+          servicesUsedHistory: {
+            ...(lubricentro.servicesUsedHistory || {}),
+            [currentMonth]: ((lubricentro.servicesUsedHistory || {})[currentMonth] || 0) + 1
+          }
+        });
+        
+        return true;
       }
-    }));
+    }
     
-    return { expired, paymentDue };
+    // Por defecto, no permitir si no está en trial o activo
+    return false;
   } catch (error) {
-    console.error('Error al verificar estados de suscripciones:', error);
+    console.error('Error al incrementar contador de servicios:', error);
+    return false;
+  }
+};
+
+// Función para activar suscripción
+export const activateSubscription = async (
+  lubricentroId: string,
+  subscriptionPlan: SubscriptionPlanType,
+  renewalType: 'monthly' | 'semiannual' = 'monthly'
+): Promise<void> => {
+  try {
+    const now = new Date();
+    const subscriptionEndDate = new Date(now);
+    
+    // Calcular fecha de fin según el tipo de renovación
+    if (renewalType === 'monthly') {
+      subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 1);
+    } else {
+      subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 6);
+    }
+    
+    const nextPaymentDate = new Date(subscriptionEndDate);
+    
+    await updateLubricentro(lubricentroId, {
+      estado: 'activo',
+      subscriptionPlan,
+      subscriptionStartDate: now,
+      subscriptionEndDate,
+      subscriptionRenewalType: renewalType,
+      nextPaymentDate,
+      paymentStatus: 'paid',
+      autoRenewal: true,
+      // Reiniciar contador de servicios al activar
+      servicesUsedThisMonth: 0
+    });
+    
+    console.log(`Suscripción ${subscriptionPlan} activada para lubricentro ${lubricentroId}`);
+  } catch (error) {
+    console.error('Error al activar suscripción:', error);
     throw error;
   }
 };
 
-/**
- * Actualiza la suscripción de un lubricentro
- */
+// Función para actualizar suscripción (corregida - solo 4 parámetros máximo)
 export const updateSubscription = async (
   lubricentroId: string,
-  plan: SubscriptionPlanType,
-  renewalType: 'monthly' | 'semiannual',
-  autoRenewal: boolean = true,
-  paymentMethod?: string,
-  paymentReference?: string
+  subscriptionPlan: SubscriptionPlanType,
+  renewalType: 'monthly' | 'semiannual' = 'monthly',
+  autoRenewal: boolean = true
 ): Promise<void> => {
   try {
-    const lubricentro = await getLubricentroById(lubricentroId);
     const now = new Date();
+    const subscriptionEndDate = new Date(now);
     
-    // Calcular fechas basadas en el tipo de renovación
-    const cycleMonths = renewalType === 'monthly' ? 1 : 6;
-    const billingCycleEnd = new Date(now);
-    billingCycleEnd.setMonth(billingCycleEnd.getMonth() + cycleMonths);
-    
-    // Calcular fin del contrato (mínimo 6 meses desde ahora)
-    let contractEnd = new Date(now);
-    contractEnd.setMonth(contractEnd.getMonth() + 6);
-    
-    // Si el contrato existente es más largo, mantenerlo
-    if (lubricentro.contractEndDate && lubricentro.contractEndDate > contractEnd) {
-      contractEnd = lubricentro.contractEndDate;
+    // Calcular fecha de fin según el tipo de renovación
+    if (renewalType === 'monthly') {
+      subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 1);
+    } else {
+      subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 6);
     }
     
-    // Registrar pago
-    const payment = {
-      date: now,
-      amount: SUBSCRIPTION_PLANS[plan].price * (renewalType === 'monthly' ? 1 : 6),
-      method: paymentMethod || 'N/A',
-      reference: paymentReference || 'N/A'
-    };
+    const nextPaymentDate = new Date(subscriptionEndDate);
     
-    const paymentHistory = lubricentro.paymentHistory || [];
-    paymentHistory.push(payment);
-    
-    // Actualizar datos de suscripción
     await updateLubricentro(lubricentroId, {
-      estado: 'activo',
-      subscriptionPlan: plan,
-      subscriptionStartDate: lubricentro.subscriptionStartDate || now,
-      subscriptionEndDate: contractEnd, // Establecer al fin del contrato
+      subscriptionPlan,
       subscriptionRenewalType: renewalType,
-      contractEndDate: contractEnd,
-      billingCycleEndDate: billingCycleEnd,
-      lastPaymentDate: now,
-      nextPaymentDate: billingCycleEnd,
-      paymentStatus: 'paid',
+      subscriptionEndDate,
+      nextPaymentDate,
       autoRenewal,
-      paymentHistory
+      paymentStatus: 'paid'
     });
     
-    // Actualizar recuento de usuarios activos
-    await updateActiveUserCount(lubricentroId);
-    
+    console.log(`Suscripción actualizada para lubricentro ${lubricentroId}`);
   } catch (error) {
     console.error('Error al actualizar suscripción:', error);
     throw error;
   }
 };
 
-/**
- * Registra un pago para un lubricentro
- */
+// Función para registrar pago (nueva función)
 export const recordPayment = async (
   lubricentroId: string,
   amount: number,
@@ -164,127 +167,149 @@ export const recordPayment = async (
     const lubricentro = await getLubricentroById(lubricentroId);
     const now = new Date();
     
-    // Calcular próxima fecha de facturación
-    const nextPaymentDate = new Date(now);
-    const cycleMonths = lubricentro.subscriptionRenewalType === 'monthly' ? 1 : 6;
-    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + cycleMonths);
-    
-    // Registrar pago
-    const payment = {
+    // Crear registro de pago
+    const paymentRecord = {
       date: now,
       amount,
       method,
       reference
     };
     
-    const paymentHistory = lubricentro.paymentHistory || [];
-    paymentHistory.push(payment);
+    // Calcular próxima fecha de pago
+    const nextPaymentDate = new Date(now);
+    if (lubricentro.subscriptionRenewalType === 'monthly') {
+      nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+    } else {
+      nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 6);
+    }
     
-    // Actualizar lubricentro con la información de pago
+    // Actualizar lubricentro
     await updateLubricentro(lubricentroId, {
       lastPaymentDate: now,
       nextPaymentDate,
       paymentStatus: 'paid',
-      paymentHistory,
-      // Si está inactivo, reactivar
-      estado: 'activo'
+      paymentHistory: [
+        ...(lubricentro.paymentHistory || []),
+        paymentRecord
+      ]
     });
     
+    console.log(`Pago registrado para lubricentro ${lubricentroId}: ${amount}`);
   } catch (error) {
     console.error('Error al registrar pago:', error);
     throw error;
   }
 };
 
-/**
- * Verifica y actualiza el recuento de usuarios activos para un lubricentro
- */
-export const updateActiveUserCount = async (lubricentroId: string): Promise<number> => {
-  try {
-    // Obtener usuarios del lubricentro
-    const users = await getUsersByLubricentro(lubricentroId);
-    
-    // Contar usuarios activos
-    const activeUserCount = users.filter(user => user.estado === 'activo').length;
-    
-    // Actualizar el recuento en el lubricentro
-    await updateLubricentro(lubricentroId, { activeUserCount });
-    
-    return activeUserCount;
-  } catch (error) {
-    console.error('Error al actualizar recuento de usuarios activos:', error);
-    throw error;
-  }
-};
-
-/**
- * Incrementa el contador de servicios usados para un lubricentro
- * y verifica si se ha alcanzado el límite
- */
-export const incrementServiceCount = async (lubricentroId: string): Promise<boolean> => {
+// Función para verificar si se pueden agregar más usuarios (nueva función)
+export const canAddMoreUsers = async (lubricentroId: string, currentUserCount: number): Promise<boolean> => {
   try {
     const lubricentro = await getLubricentroById(lubricentroId);
     
-    // Verificar si el lubricentro está activo
-    if (lubricentro.estado !== 'activo') {
-      throw new Error('El lubricentro no tiene una suscripción activa');
+    // Si está en período de prueba
+    if (lubricentro.estado === 'trial') {
+      return currentUserCount < 2; // Máximo 2 usuarios en prueba
     }
     
-    // Verificar límites de servicio si el plan tiene un límite
-    if (lubricentro.subscriptionPlan && 
-        SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices !== null) {
-      
-      const currentMonth = new Date().toISOString().slice(0, 7); // Formato YYYY-MM
-      const servicesUsed = lubricentro.servicesUsedThisMonth || 0;
-      const maxServices = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxMonthlyServices;
-      
-      // Verificar si se ha alcanzado el límite
-      // Verificar si hay un límite de servicios (maxServices podría ser null para el plan premium)
-if (maxServices !== null && servicesUsed >= maxServices) {
-    throw new Error(`Has alcanzado el límite de ${maxServices} servicios para este mes según tu plan ${SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].name}`);
-  }
-      
-      // Actualizar contadores
-      const servicesUsedHistory = lubricentro.servicesUsedHistory || {};
-      servicesUsedHistory[currentMonth] = (servicesUsedHistory[currentMonth] || 0) + 1;
-      
-      await updateLubricentro(lubricentroId, {
-        servicesUsedThisMonth: servicesUsed + 1,
-        servicesUsedHistory
-      });
+    // Si tiene suscripción activa
+    if (lubricentro.estado === 'activo' && lubricentro.subscriptionPlan) {
+      const plan = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan];
+      return currentUserCount < plan.maxUsers;
     }
     
-    return true;
+    return false;
   } catch (error) {
-    console.error('Error al incrementar contador de servicios:', error);
+    console.error('Error al verificar límite de usuarios:', error);
+    return false;
+  }
+};
+
+// Función para cancelar suscripción
+export const cancelSubscription = async (lubricentroId: string): Promise<void> => {
+  try {
+    await updateLubricentro(lubricentroId, {
+      estado: 'inactivo',
+      autoRenewal: false,
+      paymentStatus: 'pending'
+    });
+    
+    console.log(`Suscripción cancelada para lubricentro ${lubricentroId}`);
+  } catch (error) {
+    console.error('Error al cancelar suscripción:', error);
     throw error;
   }
 };
 
-/**
- * Verifica si un lubricentro puede agregar más usuarios
- * basado en su plan de suscripción actual
- */
-export const canAddMoreUsers = async (lubricentroId: string): Promise<boolean> => {
+// Función para verificar suscripciones expiradas
+export const checkExpiredSubscriptions = async (): Promise<void> => {
   try {
-    // Obtener datos del lubricentro y usuarios
-    const [lubricentro, users] = await Promise.all([
-      getLubricentroById(lubricentroId),
-      getUsersByLubricentro(lubricentroId)
-    ]);
+    const allLubricentros = await getAllLubricentros();
+    const now = new Date();
     
-    // Si no tiene plan, usar el límite más bajo
-    if (!lubricentro.subscriptionPlan) {
-      return users.filter(u => u.estado === 'activo').length < SUBSCRIPTION_PLANS.starter.maxUsers;
+    for (const lubricentro of allLubricentros) {
+      if (lubricentro.estado === 'activo' && lubricentro.subscriptionEndDate) {
+        const endDate = new Date(lubricentro.subscriptionEndDate);
+        
+        if (endDate < now) {
+          // Suscripción expirada
+          await updateLubricentro(lubricentro.id, {
+            estado: 'inactivo',
+            paymentStatus: 'overdue'
+          });
+          
+          console.log(`Suscripción expirada para lubricentro ${lubricentro.id}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error al verificar suscripciones expiradas:', error);
+    throw error;
+  }
+};
+
+// Función para obtener estadísticas de suscripciones
+export const getSubscriptionStats = async () => {
+  try {
+    const allLubricentros = await getAllLubricentros();
+    
+    const stats = {
+      total: allLubricentros.length,
+      active: allLubricentros.filter(lub => lub.estado === 'activo').length,
+      trial: allLubricentros.filter(lub => lub.estado === 'trial').length,
+      inactive: allLubricentros.filter(lub => lub.estado === 'inactivo').length,
+      byPlan: {} as Record<string, number>
+    };
+    
+    // Contar por plan de suscripción
+    allLubricentros.forEach(lub => {
+      if (lub.subscriptionPlan) {
+        stats.byPlan[lub.subscriptionPlan] = (stats.byPlan[lub.subscriptionPlan] || 0) + 1;
+      }
+    });
+    
+    return stats;
+  } catch (error) {
+    console.error('Error al obtener estadísticas de suscripciones:', error);
+    throw error;
+  }
+};
+
+// Función para reiniciar contadores mensuales (ejecutar al inicio de cada mes)
+export const resetMonthlyCounters = async (): Promise<void> => {
+  try {
+    const allLubricentros = await getAllLubricentros();
+    
+    for (const lubricentro of allLubricentros) {
+      if (lubricentro.estado === 'activo' || lubricentro.estado === 'trial') {
+        await updateLubricentro(lubricentro.id, {
+          servicesUsedThisMonth: 0
+        });
+      }
     }
     
-    // Verificar contra el límite del plan
-    const activeUsers = users.filter(u => u.estado === 'activo').length;
-    const maxUsers = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers;
-    
-    return activeUsers < maxUsers;
+    console.log('Contadores mensuales reiniciados para todos los lubricentros');
   } catch (error) {
-    console.error('Error al verificar límite de usuarios:', error);
-    return false;
+    console.error('Error al reiniciar contadores mensuales:', error);
+    throw error;
   }
 };

@@ -649,7 +649,7 @@ ${oilChange.filtroCombustible ? '✅ Filtro de combustible' : ''}
    */
   exportToExcel: (oilChanges: OilChange[], filename: string = 'cambios-aceite'): void => {
     // Implementación para exportar a Excel (si se desea)
-    console.log("Función exportToExcel no implementada");
+  
   },
   
   /**

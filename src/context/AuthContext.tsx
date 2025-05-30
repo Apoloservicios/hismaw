@@ -83,9 +83,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Actualizar el currentUser en el estado
         setCurrentUser({ ...currentUser });
         
-        console.log('Perfil de usuario actualizado:', profile);
+  
       } catch (error) {
-        console.error('Error al refrescar perfil de usuario:', error);
+        
       }
     }
   };
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setPersistence(auth, browserLocalPersistence);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user ? user.uid : 'No user');
+     
       setCurrentUser(user);
       
       if (user) {
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const profile = await fetchUserProfile(user.uid);
             setUserProfile(profile);
             
-            console.log('Usuario cargado:', profile);
+       
             
             // Solo actualizar último login si el perfil existe
             if (profile) {
@@ -138,11 +138,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
-      console.log('Intentando iniciar sesión para:', email);
+      
       await signInWithEmailAndPassword(auth, email, password);
-      console.log('Inicio de sesión exitoso');
+      
     } catch (error) {
-      console.error('Error al iniciar sesión:', error);
+      
       throw error;
     } finally {
       setLoading(false);
@@ -153,12 +153,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = async (email: string, password: string, userData: Partial<User>): Promise<string> => {
     try {
       setLoading(true);
-      console.log('Registrando usuario:', email, userData);
+
       
       // 1. Crear usuario en Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      console.log('Usuario creado en Firebase Auth:', user.uid);
+   
 
       // 2. Crear objeto del usuario sin timestamps complejos
       const newUser = {
@@ -173,19 +173,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         lastLogin: serverTimestamp()
       };
 
-      console.log('Creando documento de usuario:', newUser);
+      
 
       // 3. Crear documento en Firestore
       await setDoc(doc(db, 'usuarios', user.uid), newUser);
-      console.log('Documento de usuario creado en Firestore');
+     
       
       // 4. Enviar email de verificación para dueños de lubricentro
       if (userData.role === 'admin') {
         try {
           await sendEmailVerification(user);
-          console.log('Email de verificación enviado');
+          
         } catch (emailError) {
-          console.warn('Error al enviar email de verificación:', emailError);
+          
           // No lanzar error para no interrumpir el registro
         }
       }
@@ -199,10 +199,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       setUserProfile(createdUser);
       
-      console.log('Usuario registrado exitosamente:', user.uid);
+
       return user.uid;
     } catch (error) {
-      console.error('Error al registrar usuario:', error);
+      
       throw error;
     } finally {
       setLoading(false);
@@ -213,11 +213,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = async () => {
     try {
       setLoading(true);
-      console.log('Cerrando sesión');
+     
       await signOut(auth);
-      console.log('Sesión cerrada exitosamente');
+
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+    
       throw error;
     } finally {
       setLoading(false);
@@ -227,11 +227,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Función para restablecer contraseña
   const resetPassword = async (email: string) => {
     try {
-      console.log('Enviando correo de restablecimiento a:', email);
+
       await sendPasswordResetEmail(auth, email);
-      console.log('Correo de restablecimiento enviado');
+      
     } catch (error) {
-      console.error('Error al enviar correo de restablecimiento:', error);
+      
       throw error;
     }
   };
@@ -240,14 +240,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const sendVerificationEmail = async () => {
     try {
       if (currentUser) {
-        console.log('Enviando email de verificación a:', currentUser.email);
+      
         await sendEmailVerification(currentUser);
-        console.log('Email de verificación enviado');
+        
       } else {
         throw new Error('No hay usuario autenticado');
       }
     } catch (error) {
-      console.error('Error al enviar email de verificación:', error);
+
       throw error;
     }
   };
@@ -257,7 +257,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       if (!currentUser) throw new Error('No hay usuario autenticado');
       
-      console.log('Actualizando perfil de usuario:', userData);
+     
       
       await updateDoc(doc(db, 'usuarios', currentUser.uid), {
         ...userData,
@@ -271,10 +271,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           ...userData
         };
         setUserProfile(updatedProfile);
-        console.log('Perfil actualizado localmente:', updatedProfile);
+       
       }
     } catch (error) {
-      console.error('Error al actualizar perfil:', error);
+
       throw error;
     }
   };

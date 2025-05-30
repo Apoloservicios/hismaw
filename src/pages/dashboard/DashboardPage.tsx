@@ -103,14 +103,7 @@ const TrialInfoCard: React.FC<{ lubricentro: Lubricentro; stats: OilChangeStats 
   const isExpiring = daysRemaining <= 2;
   const isLimitReached = servicesRemaining === 0;
 
-  // Debug info - remover en producción
-  console.log('TrialInfoCard Debug:', {
-    servicesUsed,
-    servicesRemaining,
-    statsThisMonth: stats?.thisMonth,
-    lubricentroServicesUsed: lubricentro.servicesUsedThisMonth,
-    progressPercentage
-  });
+
 
   return (
     <Card className={`mb-6 ${isExpiring || isLimitReached ? 'border-orange-200 bg-orange-50' : 'border-blue-200 bg-blue-50'}`}>

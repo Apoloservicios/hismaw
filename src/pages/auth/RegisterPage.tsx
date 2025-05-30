@@ -174,10 +174,9 @@ const RegisterPage: React.FC = () => {
       setError(null);
       
       if (registerType === 'lubricentro') {
-        console.log('🚀 Iniciando registro de lubricentro...');
+
         
-        // 1. PRIMERO: Registrar el usuario admin
-        console.log('👤 Paso 1: Registrando usuario admin...');
+      
         const adminId = await register(formData.email, formData.password, {
           nombre: formData.nombre,
           apellido: formData.apellido,
@@ -186,10 +185,8 @@ const RegisterPage: React.FC = () => {
           lubricentroId: undefined // Usar undefined en lugar de null
         });
         
-        console.log('✅ Usuario admin creado con ID:', adminId);
-        
-        // 2. SEGUNDO: Crear el lubricentro con el adminId
-        console.log('🏢 Paso 2: Creando lubricentro...');
+
+
         const lubricentroData = {
           fantasyName: formData.fantasyName,
           responsable: formData.responsable,
@@ -204,28 +201,27 @@ const RegisterPage: React.FC = () => {
         };
         
         const lubricentroId = await createLubricentro(lubricentroData, adminId);
-        console.log('✅ Lubricentro creado con ID:', lubricentroId);
+       
         
-        // 3. TERCERO: Actualizar el usuario con el lubricentroId
-        console.log('🔄 Paso 3: Actualizando usuario con lubricentroId...');
+    
         await updateDoc(doc(db, 'usuarios', adminId), {
           lubricentroId: lubricentroId,
           updatedAt: serverTimestamp()
         });
-        console.log('✅ Usuario actualizado con lubricentroId:', lubricentroId);
+        
         
         // 4. Pequeña pausa para sincronización
-        console.log('⏳ Esperando sincronización...');
+    
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        console.log('🎉 Registro completado exitosamente!');
+       
         
         // Redirigir a página de éxito
         navigate('/registro-exitoso');
         
       } else {
         // Registrar como empleado
-        console.log('👥 Registrando empleado...');
+
         await register(formData.email, formData.password, {
           nombre: formData.nombre,
           apellido: formData.apellido,
@@ -234,13 +230,13 @@ const RegisterPage: React.FC = () => {
           lubricentroId: selectedLubricentroId,
         });
         
-        console.log('✅ Empleado registrado exitosamente');
+    
         
         // Redirigir a página de solicitud pendiente
         navigate('/registro-pendiente');
       }
     } catch (err: any) {
-      console.error('❌ Error durante el registro:', err);
+   
       
       // Manejar distintos tipos de errores
       if (err.code === 'auth/email-already-in-use') {

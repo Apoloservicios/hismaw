@@ -127,7 +127,7 @@ const SupportPage: React.FC = () => {
         }
       };
       
-      console.log('Enviando datos:', formData); // Para depuración
+    
       
       // Realizar la petición al servidor
       const response = await fetch('https://hisma.com.ar/api/send-email.php', {
@@ -144,7 +144,7 @@ const SupportPage: React.FC = () => {
       }
       
       const responseText = await response.text();
-      console.log('Respuesta del servidor:', responseText); // Para depuración
+      
       
       let result;
       try {

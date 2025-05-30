@@ -47,8 +47,7 @@ export const createLubricentro = async (
   ownerId: string
 ): Promise<string> => {
   try {
-    console.log('📝 Creando lubricentro con datos:', data);
-    console.log('👤 Owner ID:', ownerId);
+
     
     // Validar datos obligatorios
     if (!data.fantasyName?.trim()) throw new Error('Nombre del lubricentro es obligatorio');
@@ -92,16 +91,16 @@ export const createLubricentro = async (
       autoRenewal: false
     };
     
-    console.log('📤 Datos finales para Firestore:', lubricentroData);
+
     
     // Crear el documento
     const docRef = await addDoc(collection(db, COLLECTION_NAME), lubricentroData);
     
-    console.log('✅ Lubricentro creado exitosamente con ID:', docRef.id);
+
     return docRef.id;
     
   } catch (error) {
-    console.error('❌ Error al crear lubricentro:', error);
+  
     throw error;
   }
 };
@@ -124,11 +123,11 @@ export const updateLubricentro = async (id: string, data: Partial<Lubricentro>):
       }
     });
     
-    console.log('Actualizando lubricentro con datos:', updateData);
+ 
     
     await updateDoc(docRef, updateData);
   } catch (error) {
-    console.error('Error al actualizar el lubricentro:', error);
+  
     throw error;
   }
 };
@@ -141,9 +140,9 @@ export const updateLubricentroStatus = async (id: string, estado: LubricentroSta
       estado,
       updatedAt: serverTimestamp()
     });
-    console.log(`Estado del lubricentro ${id} actualizado a: ${estado}`);
+
   } catch (error) {
-    console.error('Error al actualizar el estado del lubricentro:', error);
+
     throw error;
   }
 };
@@ -216,7 +215,7 @@ export const deleteLubricentro = async (id: string): Promise<void> => {
     }
     
     await deleteDoc(docRef);
-    console.log(`Lubricentro ${id} eliminado`);
+
   } catch (error) {
     console.error('Error al eliminar el lubricentro:', error);
     throw error;
@@ -243,7 +242,7 @@ export const uploadLubricentroLogo = async (
       logoUrl: downloadURL
     });
     
-    console.log(`Logo subido para lubricentro ${lubricentroId}: ${downloadURL}`);
+
     return downloadURL;
   } catch (error) {
     console.error('Error al subir logo del lubricentro:', error);
@@ -313,9 +312,9 @@ export const extendTrialPeriod = async (id: string, days: number): Promise<void>
       updatedAt: serverTimestamp()
     });
     
-    console.log(`Período de prueba extendido ${days} días para lubricentro ${id}`);
+
   } catch (error) {
-    console.error('Error al extender el período de prueba:', error);
+
     throw error;
   }
 };

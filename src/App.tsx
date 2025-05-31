@@ -44,13 +44,17 @@ import SupportPage from './pages/support/SupportPage';
 import LubricentroDashboardPage from './pages/admin/LubricentroDashboardPage';
 import LubricentroFormPage from './pages/admin/LubricentroFormPage';
 import LubricentroDetailPage from './pages/admin/LubricentroDetailPage';
+import LubricentroSubscriptionPage from './pages/admin/LubricentroSubscriptionPage';
+
+// Pages - Subscription Management (NUEVAS)
+import SubscriptionPlansPage from './pages/admin/SubscriptionPlansPage';
+import SubscriptionStatsPage from './pages/admin/SubscriptionStatsPage';
+
+// Pages - Super Admin Reports
+import SuperAdminReportPage from './pages/admin/SuperAdminReportPage';
 
 // Components
 import PrivateRoute from './components/common/PrivateRoute';
-
-import SuperAdminReportPage from './pages/admin/SuperAdminReportPage';
-
-import LubricentroSubscriptionPage from './pages/admin/LubricentroSubscriptionPage';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -95,16 +99,6 @@ const App: React.FC = () => {
                 } 
               />
 
-              {/* Ruta para estadísticas globales del superadmin */}
-              <Route 
-                path="/superadmin/reportes" 
-                element={
-                  <PrivateRoute requiredRoles={['superadmin']}>
-                    <SuperAdminReportPage />
-                  </PrivateRoute>
-                } 
-              />
-              
               {/* Rutas de cambios de aceite */}
               <Route 
                 path="/cambios-aceite" 
@@ -171,7 +165,7 @@ const App: React.FC = () => {
                 } 
               />
               
-              {/* Nuevas rutas para reportes detallados */}
+              {/* Rutas para reportes detallados */}
               <Route 
                 path="/reportes/operador/:id" 
                 element={
@@ -208,7 +202,9 @@ const App: React.FC = () => {
                 } 
               />
               
-              {/* Rutas de superadmin para la gestión de lubricentros */}
+              {/* ========== RUTAS DE SUPERADMIN ========== */}
+              
+              {/* Gestión de lubricentros */}
               <Route 
                 path="/superadmin/lubricentros" 
                 element={
@@ -245,12 +241,44 @@ const App: React.FC = () => {
                 } 
               />
 
-              {/* Nueva ruta para gestión de suscripciones */}
+              {/* Gestión de suscripciones individuales */}
               <Route 
                 path="/superadmin/lubricentros/suscripcion/:id" 
                 element={
                   <PrivateRoute requiredRoles={['superadmin']}>
                     <LubricentroSubscriptionPage />
+                  </PrivateRoute>
+                } 
+              />
+
+              {/* ========== NUEVAS RUTAS DE GESTIÓN DE SUSCRIPCIONES ========== */}
+              
+              {/* Gestión de planes de suscripción */}
+              <Route 
+                path="/superadmin/suscripciones/planes" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <SubscriptionPlansPage />
+                  </PrivateRoute>
+                } 
+              />
+              
+              {/* Estadísticas de suscripciones */}
+              <Route 
+                path="/superadmin/suscripciones/estadisticas" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <SubscriptionStatsPage />
+                  </PrivateRoute>
+                } 
+              />
+
+              {/* Estadísticas globales del sistema */}
+              <Route 
+                path="/superadmin/reportes" 
+                element={
+                  <PrivateRoute requiredRoles={['superadmin']}>
+                    <SuperAdminReportPage />
                   </PrivateRoute>
                 } 
               />

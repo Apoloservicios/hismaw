@@ -21,7 +21,10 @@ import {
   BuildingStorefrontIcon,
   BuildingOfficeIcon, 
   QuestionMarkCircleIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  CreditCardIcon,
+  DocumentChartBarIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 
 // Componente de carga
@@ -70,7 +73,7 @@ const MainLayout: React.FC = () => {
   const getMenuItems = () => {
     const items = [];
     
-    // Para superadmin, mostrar menú limitado
+    // Para superadmin, mostrar menú especializado
     if (userProfile.role === 'superadmin') {
       return [
         { 
@@ -83,6 +86,18 @@ const MainLayout: React.FC = () => {
           text: 'Gestión de Lubricentros', 
           icon: <BuildingOfficeIcon className="w-5 h-5" />, 
           path: '/superadmin/lubricentros',
+          divider: false
+        },
+        { 
+          text: 'Planes de Suscripción', 
+          icon: <CreditCardIcon className="w-5 h-5" />, 
+          path: '/superadmin/suscripciones/planes',
+          divider: false
+        },
+        { 
+          text: 'Estadísticas de Suscripciones', 
+          icon: <DocumentChartBarIcon className="w-5 h-5" />, 
+          path: '/superadmin/suscripciones/estadisticas',
           divider: false
         },
         { 
@@ -101,7 +116,6 @@ const MainLayout: React.FC = () => {
     }
     
     // Para usuarios que NO son superadmin (admin y user)
-    // Para todos los usuarios autenticados
     items.push(
       { 
         text: 'Dashboard', 
@@ -155,12 +169,6 @@ const MainLayout: React.FC = () => {
         path: '/soporte',
         divider: false
       },
-      // { 
-      //   text: 'Consulta Historial', 
-      //   icon: <MagnifyingGlassIcon className="w-5 h-5" />, 
-      //   path: '/consulta-historial',
-      //   divider: false
-      // },
     );
     
     return items;
@@ -381,12 +389,45 @@ const MainLayout: React.FC = () => {
                     >
                       Mi Perfil
                     </NavLink>
-                    <NavLink
-                      to="/soporte"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      Soporte
-                    </NavLink>
+                    
+                    {/* Menú específico para superadmin */}
+                    {userProfile.role === 'superadmin' && (
+                      <>
+                        <div className="border-t border-gray-100 my-1"></div>
+                        <NavLink
+                          to="/superadmin/lubricentros"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <BuildingOfficeIcon className="inline h-4 w-4 mr-2" />
+                          Lubricentros
+                        </NavLink>
+                        <NavLink
+                          to="/superadmin/suscripciones/planes"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <CreditCardIcon className="inline h-4 w-4 mr-2" />
+                          Planes
+                        </NavLink>
+                        <NavLink
+                          to="/superadmin/suscripciones/estadisticas"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <DocumentChartBarIcon className="inline h-4 w-4 mr-2" />
+                          Estadísticas
+                        </NavLink>
+                      </>
+                    )}
+                    
+                    {/* Menú para usuarios normales */}
+                    {userProfile.role !== 'superadmin' && (
+                      <NavLink
+                        to="/soporte"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Soporte
+                      </NavLink>
+                    )}
+                    
                     <div className="border-t border-gray-100"></div>
                     <button
                       onClick={handleLogout}

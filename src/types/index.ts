@@ -6,8 +6,6 @@ import { SubscriptionPlanType } from './subscription';
 export type UserRole = 'superadmin' | 'admin' | 'user';
 export type UserStatus = 'activo' | 'inactivo' | 'pendiente';
 
-
-
 export interface User {
   id: string;
   nombre: string;
@@ -15,7 +13,7 @@ export interface User {
   email: string;
   role: 'superadmin' | 'admin' | 'user';
   estado: 'activo' | 'inactivo' | 'pendiente';
-  lubricentroId?: string | null; // ✅ CORREGIDO: Ahora puede ser undefined o null
+  lubricentroId?: string | null;
   createdAt: Date;
   lastLogin?: Date | null;
   updatedAt?: Date;
@@ -24,12 +22,16 @@ export interface User {
   permissions?: string[];
 }
 
-
-
 // Tipos de Lubricentro
 export type LubricentroStatus = 'activo' | 'inactivo' | 'trial';
 
-
+// ✅ AGREGAR: Interfaz para configuración personalizada de suscripción
+export interface CustomSubscriptionConfig {
+  maxUsers: number;
+  maxMonthlyServices: number | null; // null = ilimitado
+  price: number;
+  planName: string;
+}
 
 export interface Lubricentro {
   id: string;
@@ -55,14 +57,14 @@ export interface Lubricentro {
   updatedAt?: Date;
   
   // Campos para suscripción
-  subscriptionPlan?: SubscriptionPlanType;
+  subscriptionPlan?: SubscriptionPlanType; // ✅ CAMBIAR: sin | null
   subscriptionStartDate?: Date;
-  subscriptionEndDate?: Date;
+  subscriptionEndDate?: Date; // ✅ CAMBIAR: sin | null
   subscriptionRenewalType?: 'monthly' | 'semiannual';
   contractEndDate?: Date;         
   billingCycleEndDate?: Date;     
   lastPaymentDate?: Date;         
-  nextPaymentDate?: Date;         
+  nextPaymentDate?: Date; // ✅ CAMBIAR: sin | null
   paymentStatus?: 'paid' | 'pending' | 'overdue';
   servicesUsedThisMonth?: number; 
   activeUserCount?: number;       
@@ -75,7 +77,10 @@ export interface Lubricentro {
     method: string;
     reference: string;
   }[];
-  autoRenewal?: boolean;         
+  autoRenewal?: boolean;
+  
+  // ✅ AGREGAR: Configuración personalizada de suscripción
+  customSubscriptionConfig?: CustomSubscriptionConfig;
 }
 
 // Cambiar esto para evitar conflicto con el nombre

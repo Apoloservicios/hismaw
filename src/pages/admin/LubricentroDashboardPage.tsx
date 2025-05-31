@@ -41,10 +41,13 @@ import {
   ChartBarIcon,
   UserGroupIcon,
   CreditCardIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  CogIcon,
+  DocumentChartBarIcon
 } from '@heroicons/react/24/outline';
 
 import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../../types/subscription';
+
 // Componente para extender período de prueba
 const ExtendTrialModal: React.FC<{
   isOpen: boolean;
@@ -57,7 +60,6 @@ const ExtendTrialModal: React.FC<{
 
   if (!lubricentro) return null;
 
-  // CORRECCIÓN: Función sin parámetro de evento
   const handleSubmit = () => {
     onConfirm(days);
   };
@@ -111,7 +113,6 @@ const ExtendTrialModal: React.FC<{
         </div>
         
         <div className="mt-4">
-          {/* CORRECCIÓN: Input nativo en lugar del componente Input */}
           <div>
             <label htmlFor="days" className="block text-sm font-medium text-gray-700 mb-1">
               Días a extender
@@ -160,7 +161,6 @@ const ChangeStatusModal: React.FC<{
 }> = ({ isOpen, onClose, onConfirm, lubricentro, newStatus, loading }) => {
   if (!lubricentro) return null;
 
-  // Textos según el estado
   const getStatusText = () => {
     switch (newStatus) {
       case 'activo':
@@ -266,7 +266,6 @@ const LubricentroDetailsModal: React.FC<{
 }> = ({ isOpen, onClose, lubricentro }) => {
   if (!lubricentro) return null;
 
-  // Formatear fecha
   const formatDate = (date: Date | undefined): string => {
     if (!date) return 'No disponible';
     return new Date(date).toLocaleDateString('es-ES', {
@@ -327,10 +326,45 @@ const LubricentroDetailsModal: React.FC<{
             </div>
           </div>
 
-          
           <div>
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Estado y Registro</h3>
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Suscripción</h3>
             <div className="bg-gray-50 p-4 rounded-md space-y-3">
+              <div>
+                <p className="text-xs text-gray-500">Plan Actual</p>
+                <div className="mt-1">
+                  {lubricentro.subscriptionPlan ? (
+                    <Badge color="info" text={SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].name} />
+                  ) : (
+                    <Badge color="warning" text="Sin Plan" />
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Estado de Pago</p>
+                <div className="mt-1">
+                  {lubricentro.paymentStatus === 'paid' ? (
+                    <Badge color="success" text="Pagado" />
+                  ) : lubricentro.paymentStatus === 'pending' ? (
+                    <Badge color="warning" text="Pendiente" />
+                  ) : lubricentro.paymentStatus === 'overdue' ? (
+                    <Badge color="error" text="Vencido" />
+                  ) : (
+                    <Badge color="default" text="No definido" />
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Próximo Pago</p>
+                <p className="text-sm font-medium">{formatDate(lubricentro.nextPaymentDate)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">Estado y Fechas</h3>
+          <div className="bg-gray-50 p-4 rounded-md space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-gray-500">Estado</p>
                 <div className="mt-1">
@@ -353,15 +387,11 @@ const LubricentroDetailsModal: React.FC<{
                   <p className="text-sm font-medium">{formatDate(lubricentro.trialEndDate)}</p>
                 </div>
               )}
-              <div>
-                <p className="text-xs text-gray-500">Última Actualización</p>
-                <p className="text-sm font-medium">{formatDate(lubricentro.updatedAt)}</p>
-              </div>
             </div>
           </div>
         </div>
-        
-        <div>
+
+        <div className="mt-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Configuración del Sistema</h3>
           <div className="bg-gray-50 p-4 rounded-md">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -372,10 +402,6 @@ const LubricentroDetailsModal: React.FC<{
               <div>
                 <p className="text-xs text-gray-500">ID de Lubricentro</p>
                 <p className="text-sm font-medium text-gray-600">{lubricentro.id}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">ID del Propietario</p>
-                <p className="text-sm font-medium text-gray-600">{lubricentro.ownerId}</p>
               </div>
             </div>
           </div>
@@ -414,7 +440,9 @@ const LubricentroDashboardPage: React.FC = () => {
     activos: 0,
     inactivos: 0,
     trial: 0,
-    expiring7Days: 0
+    expiring7Days: 0,
+    withPaidPlan: 0,
+    withoutPlan: 0
   });
   
   // Cargar datos iniciales
@@ -440,6 +468,8 @@ const LubricentroDashboardPage: React.FC = () => {
       const activos = data.filter(l => l.estado === 'activo').length;
       const inactivos = data.filter(l => l.estado === 'inactivo').length;
       const trial = data.filter(l => l.estado === 'trial').length;
+      const withPaidPlan = data.filter(l => l.subscriptionPlan && l.estado === 'activo').length;
+      const withoutPlan = data.filter(l => !l.subscriptionPlan).length;
       
       // Calcular lubricentros que expiran en los próximos 7 días
       const now = new Date();
@@ -458,7 +488,9 @@ const LubricentroDashboardPage: React.FC = () => {
         activos,
         inactivos,
         trial,
-        expiring7Days
+        expiring7Days,
+        withPaidPlan,
+        withoutPlan
       });
       
     } catch (err) {
@@ -469,11 +501,10 @@ const LubricentroDashboardPage: React.FC = () => {
     }
   };
   
-  // Aplicar filtros y búsqueda - CORREGIDO
+  // Aplicar filtros y búsqueda
   const applyFilters = () => {
     let filtered = [...lubricentros];
     
-    // CORRECCIÓN: Lógica de filtrado mejorada
     if (activeTab === 'activo') {
       filtered = filtered.filter(l => l.estado === 'activo');
     } else if (activeTab === 'trial') {
@@ -481,7 +512,6 @@ const LubricentroDashboardPage: React.FC = () => {
     } else if (activeTab === 'inactivo') {
       filtered = filtered.filter(l => l.estado === 'inactivo');
     } else if (activeTab === 'expirando') {
-      // Filtrar por período de prueba a punto de expirar (próximos 7 días)
       const now = new Date();
       const in7Days = new Date(now);
       in7Days.setDate(in7Days.getDate() + 7);
@@ -492,8 +522,11 @@ const LubricentroDashboardPage: React.FC = () => {
         new Date(l.trialEndDate) > now &&
         new Date(l.trialEndDate) <= in7Days
       );
+    } else if (activeTab === 'sin-plan') {
+      filtered = filtered.filter(l => !l.subscriptionPlan);
+    } else if (activeTab === 'con-plan') {
+      filtered = filtered.filter(l => l.subscriptionPlan && l.estado === 'activo');
     }
-    // Si es 'todos', no aplicamos filtro adicional por estado
     
     // Aplicar búsqueda
     if (searchTerm.trim()) {
@@ -524,9 +557,7 @@ const LubricentroDashboardPage: React.FC = () => {
       setProcessingAction(true);
       await updateLubricentroStatus(selectedLubricentro.id, newStatus);
       
-      // Actualizar la lista de lubricentros
       loadLubricentros();
-      
       setIsChangeStatusModalOpen(false);
     } catch (err) {
       console.error('Error al cambiar el estado del lubricentro:', err);
@@ -550,9 +581,7 @@ const LubricentroDashboardPage: React.FC = () => {
       setProcessingAction(true);
       await extendTrialPeriod(selectedLubricentro.id, days);
       
-      // Actualizar la lista de lubricentros
       loadLubricentros();
-      
       setIsExtendTrialModalOpen(false);
     } catch (err) {
       console.error('Error al extender el período de prueba:', err);
@@ -623,13 +652,31 @@ const LubricentroDashboardPage: React.FC = () => {
       title="Gestión de Lubricentros"
       subtitle="Administración de lubricentros registrados en el sistema"
       action={
-        <Button
-          color="primary"
-          icon={<PlusIcon className="h-5 w-5" />}
-          onClick={() => navigate('/superadmin/lubricentros/nuevo')}
-        >
-          Nuevo Lubricentro
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            color="info"
+            variant="outline"
+            icon={<DocumentChartBarIcon className="h-5 w-5" />}
+            onClick={() => navigate('/superadmin/suscripciones/estadisticas')}
+          >
+            Estadísticas
+          </Button>
+          <Button
+            color="secondary"
+            variant="outline"
+            icon={<CogIcon className="h-5 w-5" />}
+            onClick={() => navigate('/superadmin/suscripciones/planes')}
+          >
+            Gestionar Planes
+          </Button>
+          <Button
+            color="primary"
+            icon={<PlusIcon className="h-5 w-5" />}
+            onClick={() => navigate('/superadmin/lubricentros/nuevo')}
+          >
+            Nuevo Lubricentro
+          </Button>
+        </div>
       }
     >
       {error && (
@@ -639,7 +686,7 @@ const LubricentroDashboardPage: React.FC = () => {
       )}
       
       {/* Tarjetas de estadísticas */}
-      <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 mb-6 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardBody>
             <div className="flex items-center">
@@ -699,6 +746,20 @@ const LubricentroDashboardPage: React.FC = () => {
         <Card>
           <CardBody>
             <div className="flex items-center">
+              <div className="rounded-full p-3 bg-blue-100 mr-4">
+                <CreditCardIcon className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Con Plan</p>
+                <p className="text-2xl font-semibold text-gray-800">{stats.withPaidPlan}</p>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+        
+        <Card>
+          <CardBody>
+            <div className="flex items-center">
               <div className="rounded-full p-3 bg-orange-100 mr-4">
                 <CalendarDaysIcon className="h-6 w-6 text-orange-600" />
               </div>
@@ -750,7 +811,9 @@ const LubricentroDashboardPage: React.FC = () => {
           { id: 'activo', label: 'Activos' },
           { id: 'trial', label: 'En Prueba' },
           { id: 'inactivo', label: 'Inactivos' },
-          { id: 'expirando', label: 'Por Expirar' }
+          { id: 'expirando', label: 'Por Expirar' },
+          { id: 'con-plan', label: 'Con Plan' },
+          { id: 'sin-plan', label: 'Sin Plan' }
         ]}
         className="mb-6"
       />
@@ -758,14 +821,20 @@ const LubricentroDashboardPage: React.FC = () => {
       {/* Tabla de lubricentros */}
       <Card>
         <CardHeader
-          title={`Lubricentros ${activeTab !== 'todos' ? activeTab === 'expirando' ? 'por Expirar' : activeTab === 'activo' ? 'Activos' : activeTab === 'trial' ? 'en Prueba' : 'Inactivos' : ''}`}
+          title={`Lubricentros ${activeTab !== 'todos' ? 
+            activeTab === 'expirando' ? 'por Expirar' : 
+            activeTab === 'activo' ? 'Activos' : 
+            activeTab === 'trial' ? 'en Prueba' : 
+            activeTab === 'inactivo' ? 'Inactivos' :
+            activeTab === 'con-plan' ? 'con Plan de Suscripción' :
+            activeTab === 'sin-plan' ? 'sin Plan de Suscripción' : '' : ''}`}
           subtitle={`Mostrando ${filteredLubricentros.length} ${filteredLubricentros.length === 1 ? 'lubricentro' : 'lubricentros'}`}
         />
         <CardBody>
           {filteredLubricentros.length > 0 ? (
             <div className="overflow-x-auto">
               <Table
-                headers={['Nombre', 'Responsable', 'CUIT', 'Estado', 'Registro', 'Fin Prueba', 'Acciones']}
+                headers={['Nombre', 'Responsable', 'CUIT', 'Estado', 'Plan', 'Registro', 'Fin Prueba', 'Acciones']}
               >
                 {filteredLubricentros.map((lubricentro) => (
                   <TableRow key={lubricentro.id}>
@@ -785,6 +854,13 @@ const LubricentroDashboardPage: React.FC = () => {
                       {getStatusBadge(lubricentro.estado)}
                     </TableCell>
                     <TableCell>
+                      {lubricentro.subscriptionPlan ? (
+                        <Badge color="info" text={SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.name || 'Plan Desconocido'} />
+                      ) : (
+                        <Badge color="warning" text="Sin Plan" />
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {formatDate(lubricentro.createdAt)}
                     </TableCell>
                     <TableCell>
@@ -801,16 +877,6 @@ const LubricentroDashboardPage: React.FC = () => {
                         <span className="text-gray-400">N/A</span>
                       )}
                     </TableCell>
-
-                     {/* Nueva columna para el Plan */}
-                      <TableCell>
-                        {lubricentro.subscriptionPlan ? (
-                          <Badge color="info" text={SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]?.name || 'N/A'} />
-                        ) : (
-                          <span className="text-gray-400">Sin Plan</span>
-                        )}
-                      </TableCell>
-
                     <TableCell>
                       <div className="flex space-x-2">
                         <Button
@@ -875,15 +941,16 @@ const LubricentroDashboardPage: React.FC = () => {
                             </svg>
                           </Button>
                         )}
-                         <Button
-                            size="sm"
-                            color="info"
-                            variant="outline"
-                            onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${lubricentro.id}`)}
-                            title="Gestionar Suscripción"
-                          >
-                            <CreditCardIcon className="h-4 w-4" />
-                          </Button>
+                        
+                        <Button
+                          size="sm"
+                          color="info"
+                          variant="outline"
+                          onClick={() => navigate(`/superadmin/lubricentros/suscripcion/${lubricentro.id}`)}
+                          title="Gestionar Suscripción"
+                        >
+                          <CreditCardIcon className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -896,9 +963,13 @@ const LubricentroDashboardPage: React.FC = () => {
                 {searchTerm 
                   ? 'No se encontraron lubricentros con ese criterio de búsqueda.' 
                   : activeTab !== 'todos' 
-                    ? `No hay lubricentros ${activeTab === 'activo' ? 'activos' : 
-                       activeTab === 'trial' ? 'en período de prueba' : 
-                       activeTab === 'expirando' ? 'que expiren pronto' : 'inactivos'}.` 
+                    ? `No hay lubricentros ${
+                        activeTab === 'activo' ? 'activos' : 
+                        activeTab === 'trial' ? 'en período de prueba' : 
+                        activeTab === 'expirando' ? 'que expiren pronto' : 
+                        activeTab === 'con-plan' ? 'con plan de suscripción' :
+                        activeTab === 'sin-plan' ? 'sin plan de suscripción' :
+                        'inactivos'}.` 
                     : 'No hay lubricentros registrados.'}
               </p>
               {searchTerm && (
@@ -918,30 +989,41 @@ const LubricentroDashboardPage: React.FC = () => {
       
       {/* Guía de gestión de lubricentros */}
       <Card className="mt-6">
-        <CardHeader title="Guía de Gestión de Lubricentros" />
+        <CardHeader title="Guía de Gestión de Lubricentros y Suscripciones" />
         <CardBody>
           <div className="text-sm text-gray-600 space-y-4">
             <p>
               <strong>Estados de Lubricentro:</strong> Un lubricentro puede estar en uno de estos estados:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Activo:</strong> El lubricentro tiene acceso completo al sistema y sus funcionalidades.</li>
+              <li><strong>Activo:</strong> El lubricentro tiene acceso completo al sistema según su plan de suscripción.</li>
               <li><strong>En Prueba:</strong> El lubricentro puede acceder al sistema durante un período limitado (generalmente 7 días).</li>
               <li><strong>Inactivo:</strong> El lubricentro no puede acceder al sistema.</li>
             </ul>
             
             <p>
-              <strong>Gestión de Membresías:</strong> Como superadministrador, usted puede:
+              <strong>Planes de Suscripción:</strong> Gestiona los planes disponibles para los lubricentros:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Activar Membresía:</strong> Cambiar el estado de un lubricentro a "Activo".</li>
-              <li><strong>Extender Período de Prueba:</strong> Añadir días adicionales al período de prueba de un lubricentro.</li>
-              <li><strong>Desactivar Membresía:</strong> Cambiar el estado de un lubricentro a "Inactivo".</li>
+              <li><strong>Plan Iniciante:</strong> 1 usuario, 25 servicios/mes - $1,500/mes</li>
+              <li><strong>Plan Básico:</strong> 2 usuarios, 50 servicios/mes - $2,500/mes</li>
+              <li><strong>Plan Premium:</strong> 5 usuarios, 150 servicios/mes - $4,500/mes (Recomendado)</li>
+              <li><strong>Plan Empresarial:</strong> Usuarios y servicios ilimitados - $7,500/mes</li>
+            </ul>
+            
+            <p>
+              <strong>Gestión de Suscripciones:</strong> Como superadministrador, usted puede:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Activar Suscripción:</strong> Asignar un plan y cambiar el estado a "Activo".</li>
+              <li><strong>Extender Período de Prueba:</strong> Añadir días adicionales al período de prueba.</li>
+              <li><strong>Gestionar Pagos:</strong> Registrar pagos y mantener el historial actualizado.</li>
+              <li><strong>Cambiar Planes:</strong> Actualizar el plan de suscripción de un lubricentro.</li>
             </ul>
             
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4">
               <p className="text-sm text-yellow-700">
-                <strong>Nota:</strong> Los lubricentros en período de prueba que alcanzan la fecha de finalización sin ser activados pasarán automáticamente a estado "Inactivo". Es recomendable revisar regularmente los lubricentros que están por expirar.
+                <strong>Nota:</strong> Los lubricentros en período de prueba que alcanzan la fecha de finalización sin ser activados pasarán automáticamente a estado "Inactivo". Es recomendable revisar regularmente los lubricentros que están por expirar y gestionar sus suscripciones.
               </p>
             </div>
           </div>

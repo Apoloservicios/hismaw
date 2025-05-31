@@ -1,4 +1,4 @@
-// src/services/userService.ts
+// src/services/userService.ts - VERSIÓN ACTUALIZADA
 import { 
   collection, 
   doc, 
@@ -25,12 +25,10 @@ import {
 } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { User, UserRole, UserStatus } from '../types';
-import { canAddMoreUsers } from './subscriptionService';
+// ✅ CAMBIO PRINCIPAL: Usar el nuevo servicio unificado
+import { validateUserCreation } from './unifiedSubscriptionService';
 
 import { getLubricentroById } from '../services/lubricentroService';
-import { Lubricentro } from '../types';
-import { SUBSCRIPTION_PLANS } from '../types/subscription';
-
 
 const COLLECTION_NAME = 'usuarios';
 
@@ -106,11 +104,9 @@ export const createUser = async (
   userData: Omit<User, 'id' | 'createdAt' | 'lastLogin'>
 ): Promise<string> => {
   try {
-    // Crear usuario en Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
     
-    // Crear documento en Firestore
     await setDoc(doc(db, COLLECTION_NAME, uid), {
       ...userData,
       email,
@@ -126,6 +122,7 @@ export const createUser = async (
   }
 };
 
+// ✅ CAMBIO PRINCIPAL: Invitar usuario con validación unificada
 export const inviteUser = async (
   email: string,
   userData: {
@@ -136,26 +133,24 @@ export const inviteUser = async (
   }
 ): Promise<void> => {
   try {
-    // Obtener el lubricentro
-    const lubricentro = await getLubricentroById(userData.lubricentroId);
+    console.log('🔄 Iniciando invitación de usuario...');
     
-    // Obtener usuarios activos
-    const usersData = await getUsersByLubricentro(userData.lubricentroId);
-    const activeUsers = usersData.filter(u => u.estado === 'activo').length;
+    // ✅ NUEVA VALIDACIÓN UNIFICADA
+    const validation = await validateUserCreation(userData.lubricentroId);
     
-    // Verificar el límite
-    const maxUsers = lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan] 
-      ? SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].maxUsers 
-      : 2;
-    
-    if (activeUsers >= maxUsers) {
-      throw new Error(`Límite de usuarios alcanzado (${maxUsers})`);
+    if (!validation.canCreateUser) {
+      console.error('❌ Validación de usuario falló:', validation.message);
+      throw new Error(validation.message || 'No se puede invitar más usuarios');
     }
     
-    // Si todo está bien, proceder con la invitación
-    // Resto del código...
+    console.log('✅ Validación de usuario exitosa');
+    console.log(`👥 Usuarios restantes: ${validation.remainingUsers}`);
+    
+    // Aquí continuaría la lógica de invitación (envío de email, etc.)
+    // Por ahora solo validamos los límites
+    
   } catch (error) {
-    console.error('Error al invitar al usuario:', error);
+    console.error('❌ Error al invitar al usuario:', error);
     throw error;
   }
 };
@@ -183,7 +178,6 @@ export const updateUserProfile = async (id: string, data: Partial<User>): Promis
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
     
-    // Nunca actualizar el ID o createdAt directamente
     const { id: _, createdAt: __, ...updateData } = data;
     
     await updateDoc(docRef, {
@@ -191,8 +185,6 @@ export const updateUserProfile = async (id: string, data: Partial<User>): Promis
       updatedAt: serverTimestamp()
     });
     
-    // Si se está actualizando el email, también actualizarlo en Firebase Auth
-    // Esto requiere que el usuario esté actualmente autenticado
     if (data.email && auth.currentUser && auth.currentUser.uid === id) {
       await updateEmail(auth.currentUser, data.email);
     }
@@ -205,7 +197,6 @@ export const updateUserProfile = async (id: string, data: Partial<User>): Promis
 // Actualizar contraseña de usuario
 export const updateUserPassword = async (id: string, newPassword: string): Promise<void> => {
   try {
-    // Esto requiere que el usuario esté actualmente autenticado
     if (auth.currentUser && auth.currentUser.uid === id) {
       await updatePassword(auth.currentUser, newPassword);
     } else {
@@ -217,7 +208,7 @@ export const updateUserPassword = async (id: string, newPassword: string): Promi
   }
 };
 
-// Reautenticar usuario (necesario para operaciones sensibles)
+// Reautenticar usuario
 export const reauthenticateUser = async (password: string): Promise<void> => {
   try {
     if (!auth.currentUser || !auth.currentUser.email) {
@@ -250,16 +241,11 @@ export const updateUserStatus = async (id: string, estado: UserStatus): Promise<
 // Eliminar usuario
 export const deleteUserAccount = async (id: string): Promise<void> => {
   try {
-    // Eliminar el documento de Firestore
     await deleteDoc(doc(db, COLLECTION_NAME, id));
     
-    // Si el usuario actual es el que se está eliminando, también eliminarlo de Auth
     if (auth.currentUser && auth.currentUser.uid === id) {
       await deleteUser(auth.currentUser);
     }
-    
-    // Nota: En una implementación completa, se debería usar una función de Firebase Cloud Functions
-    // para eliminar el usuario de Auth independientemente de si está autenticado actualmente
   } catch (error) {
     console.error('Error al eliminar el usuario:', error);
     throw error;
@@ -275,17 +261,15 @@ export const searchUsers = async (
   try {
     let constraints = [];
     
-    // Si se proporciona un lubricentroId, filtrar por ese lubricentro
     if (lubricentroId) {
       constraints.push(where('lubricentroId', '==', lubricentroId));
     }
     
-    // Búsqueda por nombre (startsWith)
     const qNombre = query(
       collection(db, COLLECTION_NAME),
       ...constraints,
       where('nombre', '>=', searchTerm),
-      where('nombre', '<=', searchTerm + '\uf8ff'), // Truco para simular "startsWith"
+      where('nombre', '<=', searchTerm + '\uf8ff'),
       orderBy('nombre'),
       limit(maxResults)
     );
@@ -293,12 +277,11 @@ export const searchUsers = async (
     const nombreSnapshot = await getDocs(qNombre);
     const nombreResults = nombreSnapshot.docs.map(doc => convertFirestoreUser(doc));
     
-    // Búsqueda por apellido (startsWith)
     const qApellido = query(
       collection(db, COLLECTION_NAME),
       ...constraints,
       where('apellido', '>=', searchTerm),
-      where('apellido', '<=', searchTerm + '\uf8ff'), // Truco para simular "startsWith"
+      where('apellido', '<=', searchTerm + '\uf8ff'),
       orderBy('apellido'),
       limit(maxResults)
     );
@@ -306,12 +289,11 @@ export const searchUsers = async (
     const apellidoSnapshot = await getDocs(qApellido);
     const apellidoResults = apellidoSnapshot.docs.map(doc => convertFirestoreUser(doc));
     
-    // Búsqueda por email (startsWith)
     const qEmail = query(
       collection(db, COLLECTION_NAME),
       ...constraints,
       where('email', '>=', searchTerm),
-      where('email', '<=', searchTerm + '\uf8ff'), // Truco para simular "startsWith"
+      where('email', '<=', searchTerm + '\uf8ff'),
       orderBy('email'),
       limit(maxResults)
     );
@@ -319,7 +301,6 @@ export const searchUsers = async (
     const emailSnapshot = await getDocs(qEmail);
     const emailResults = emailSnapshot.docs.map(doc => convertFirestoreUser(doc));
     
-    // Combinar resultados y eliminar duplicados
     const combinedResults = [...nombreResults, ...apellidoResults, ...emailResults];
     const uniqueResults = combinedResults.filter((user, index, self) =>
       index === self.findIndex((u) => u.id === user.id)
@@ -332,47 +313,35 @@ export const searchUsers = async (
   }
 };
 
-
-
-   // Actualizar usuario
-   export const updateUser = async (id: string, data: Partial<User>): Promise<void> => {
-    try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      
-      // Nunca actualizar el ID o createdAt directamente
-      const { id: _, createdAt: __, ...updateData } = data;
-      
-      // Si hay una URL de foto, asegurarse de que esté bien formateada
-      if (updateData.photoURL) {
-        // Verificar que sea una URL válida de Cloudinary u otra plataforma
-        try {
-          new URL(updateData.photoURL); // Esto lanzará error si no es una URL válida
-        } catch (e) {
-          console.error('URL de foto inválida', e);
-          throw new Error('La URL de la foto no es válida');
-        }
+// Actualizar usuario
+export const updateUser = async (id: string, data: Partial<User>): Promise<void> => {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    
+    const { id: _, createdAt: __, ...updateData } = data;
+    
+    if (updateData.photoURL) {
+      try {
+        new URL(updateData.photoURL);
+      } catch (e) {
+        console.error('URL de foto inválida', e);
+        throw new Error('La URL de la foto no es válida');
       }
-      
-      await updateDoc(docRef, {
-        ...updateData,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Si se está actualizando el email, también actualizarlo en Firebase Auth
-      // Esto requiere que el usuario esté actualmente autenticado
-      if (data.email && auth.currentUser && auth.currentUser.uid === id) {
-        await updateEmail(auth.currentUser, data.email);
-      }
-    } catch (error) {
-      console.error('Error al actualizar el usuario:', error);
-      throw error;
     }
-  };
-
-
-
-
-
+    
+    await updateDoc(docRef, {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    });
+    
+    if (data.email && auth.currentUser && auth.currentUser.uid === id) {
+      await updateEmail(auth.currentUser, data.email);
+    }
+  } catch (error) {
+    console.error('Error al actualizar el usuario:', error);
+    throw error;
+  }
+};
 
 // Obtener estadísticas de operadores
 export const getUsersOperatorStats = async (
@@ -381,7 +350,6 @@ export const getUsersOperatorStats = async (
   endDate: Date
 ): Promise<{ operatorId: string, operatorName: string, count: number }[]> => {
   try {
-    // Obtener todos los cambios de aceite en el período especificado
     const q = query(
       collection(db, 'cambiosAceite'),
       where('lubricentroId', '==', lubricentroId),
@@ -391,7 +359,6 @@ export const getUsersOperatorStats = async (
     
     const querySnapshot = await getDocs(q);
     
-    // Agrupar por operador y contar
     const operatorCounts: Record<string, { operatorId: string, operatorName: string, count: number }> = {};
     
     querySnapshot.docs.forEach(doc => {
@@ -410,15 +377,9 @@ export const getUsersOperatorStats = async (
       operatorCounts[operatorId].count++;
     });
     
-    // Convertir a array y ordenar por cantidad (descendente)
     return Object.values(operatorCounts).sort((a, b) => b.count - a.count);
   } catch (error) {
     console.error('Error al obtener estadísticas de operadores:', error);
     throw error;
   }
-
- 
-
-
-
 };

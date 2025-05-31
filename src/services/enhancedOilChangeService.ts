@@ -1,4 +1,4 @@
-// src/services/oilChangeService.ts - VERSIÓN ACTUALIZADA
+// src/services/enhancedOilChangeService.ts
 import { 
   collection, 
   doc, 
@@ -11,16 +11,17 @@ import {
   where, 
   orderBy, 
   serverTimestamp,
-  Timestamp,
   limit,
   startAfter,
   QueryDocumentSnapshot,
   DocumentData
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { OilChange, OilChangeStats } from '../types';
-// ✅ CAMBIO PRINCIPAL: Usar el nuevo servicio unificado
-import { validateServiceCreation, incrementServiceCounter } from './unifiedSubscriptionService';
+import { OilChange, OilChangeStats, User } from '../types';
+// ✅ INTEGRAR VALIDACIONES Y AUDITORÍA
+import { validationMiddleware } from '../middleware/validationMiddleware';
+import { auditLoggingService } from '../services/auditLoggingService';
+import { getLubricentroById } from './lubricentroService';
 
 const COLLECTION_NAME = 'cambiosAceite';
 
@@ -41,11 +42,8 @@ const convertFirestoreOilChange = (doc: any): OilChange => {
 // Función auxiliar para asegurar que una fecha sea un objeto Date
 const ensureDateObject = (date: any): Date => {
   if (!date) return new Date();
-  
   if (date instanceof Date) return date;
-  
   if (typeof date === 'string') return new Date(date);
-  
   if (date.toDate && typeof date.toDate === 'function') {
     try {
       return date.toDate();
@@ -54,11 +52,269 @@ const ensureDateObject = (date: any): Date => {
       return new Date();
     }
   }
-  
   return new Date();
 };
 
-// Obtener cambio de aceite por ID
+// ✅ VERSIÓN MEJORADA CON VALIDACIONES Y AUDITORÍA
+export const createOilChangeWithValidation = async (
+  data: Omit<OilChange, 'id' | 'createdAt'>,
+  user: User
+): Promise<string> => {
+  try {
+    console.log('🔄 Iniciando creación de cambio de aceite con validaciones...');
+    
+    // ✅ 1. VALIDACIÓN COMPLETA CON MIDDLEWARE
+    const validation = await validationMiddleware.validateServiceCreation(data.lubricentroId, user);
+    
+    if (!validation.canProceed) {
+      // Registrar fallo de validación
+      await auditLoggingService.logValidationFailed(
+        user,
+        'create_service',
+        validation.message,
+        data.lubricentroId
+      );
+      
+      throw new Error(validation.message);
+    }
+    
+    console.log('✅ Validación exitosa');
+    
+    // ✅ 2. OBTENER INFORMACIÓN DEL LUBRICENTRO PARA AUDITORÍA
+    const lubricentro = await getLubricentroById(data.lubricentroId);
+    
+    // ✅ 3. PREPARAR DATOS
+    const dominioVehiculo = data.dominioVehiculo.toUpperCase();
+    const fechaServicio = ensureDateObject(data.fechaServicio);
+    
+    // Generar fecha del próximo cambio basado en la periodicidad
+    const fechaProximoCambio = new Date(fechaServicio);
+    fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + data.perioricidad_servicio);
+    
+    // ✅ 4. CREAR EL DOCUMENTO
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+      ...data,
+      dominioVehiculo,
+      fechaServicio,
+      fechaProximoCambio,
+      fecha: new Date(),
+      createdAt: serverTimestamp()
+    });
+    
+    console.log('✅ Cambio de aceite creado exitosamente:', docRef.id);
+    
+    // ✅ 5. REGISTRAR EN AUDITORÍA
+    await auditLoggingService.logServiceCreated(
+      user,
+      data.lubricentroId,
+      lubricentro.fantasyName,
+      data.nroCambio
+    );
+    
+    return docRef.id;
+    
+  } catch (error) {
+    console.error('❌ Error al crear el cambio de aceite:', error);
+    
+    // Registrar error en auditoría
+    if (error instanceof Error) {
+      await auditLoggingService.logSystemError(
+        error,
+        'createOilChange',
+        user,
+        data.lubricentroId
+      );
+    }
+    
+    throw error;
+  }
+};
+
+// ✅ ACTUALIZAR CAMBIO DE ACEITE CON AUDITORÍA
+export const updateOilChangeWithValidation = async (
+  id: string,
+  data: Partial<OilChange>,
+  user: User
+): Promise<void> => {
+  try {
+    console.log('🔄 Iniciando actualización de cambio de aceite...');
+    
+    // Obtener el cambio de aceite actual
+    const docRef = doc(db, COLLECTION_NAME, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error('El cambio de aceite no existe');
+    }
+    
+    const currentData = convertFirestoreOilChange(docSnap);
+    
+    // ✅ VALIDAR PERMISOS
+    const validation = await validationMiddleware.validateAction({
+      user,
+      lubricentroId: currentData.lubricentroId,
+      action: 'create_service', // Usamos la misma validación que para crear
+      metadata: { action: 'update', changeId: id }
+    });
+    
+    if (!validation.canProceed) {
+      await auditLoggingService.logValidationFailed(
+        user,
+        'update_service',
+        validation.message,
+        currentData.lubricentroId
+      );
+      throw new Error(validation.message);
+    }
+    
+    // Preparar datos de actualización
+    const updateData: any = { ...data };
+    
+    if (data.dominioVehiculo) {
+      updateData.dominioVehiculo = data.dominioVehiculo.toUpperCase();
+    }
+    
+    if (data.fechaServicio) {
+      updateData.fechaServicio = ensureDateObject(data.fechaServicio);
+    }
+    
+    // Recalcular fecha del próximo cambio si es necesario
+    if (data.fechaServicio || data.perioricidad_servicio) {
+      let fechaServicioToUse;
+      if (data.fechaServicio) {
+        fechaServicioToUse = ensureDateObject(data.fechaServicio);
+      } else {
+        fechaServicioToUse = ensureDateObject(currentData.fechaServicio);
+      }
+      
+      const perioricidad = data.perioricidad_servicio !== undefined ? data.perioricidad_servicio : currentData.perioricidad_servicio;
+      
+      const fechaProximoCambio = new Date(fechaServicioToUse);
+      fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + perioricidad);
+      
+      updateData.fechaProximoCambio = fechaProximoCambio;
+    }
+    
+    // Eliminar campos que no se deben actualizar
+    const { id: _, createdAt: __, lubricentroId: ___, ...cleanData } = updateData;
+    
+    await updateDoc(docRef, {
+      ...cleanData,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log('✅ Cambio de aceite actualizado exitosamente');
+    
+    // ✅ REGISTRAR EN AUDITORÍA
+    const lubricentro = await getLubricentroById(currentData.lubricentroId);
+    await auditLoggingService.logEvent(
+      'service_updated',
+      'UPDATE_SERVICE',
+      `Servicio ${currentData.nroCambio} actualizado`,
+      {
+        user,
+        lubricentroId: currentData.lubricentroId,
+        lubricentroName: lubricentro.fantasyName,
+        severity: 'info',
+        metadata: { 
+          serviceNumber: currentData.nroCambio,
+          updatedFields: Object.keys(cleanData)
+        }
+      }
+    );
+    
+  } catch (error) {
+    console.error('❌ Error al actualizar el cambio de aceite:', error);
+    
+    if (error instanceof Error) {
+      await auditLoggingService.logSystemError(
+        error,
+        'updateOilChange',
+        user
+      );
+    }
+    
+    throw error;
+  }
+};
+
+// ✅ ELIMINAR CAMBIO DE ACEITE CON AUDITORÍA
+export const deleteOilChangeWithValidation = async (
+  id: string,
+  user: User
+): Promise<void> => {
+  try {
+    console.log('🔄 Iniciando eliminación de cambio de aceite...');
+    
+    // Obtener el cambio de aceite antes de eliminarlo
+    const docRef = doc(db, COLLECTION_NAME, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      throw new Error('El cambio de aceite no existe');
+    }
+    
+    const oilChangeData = convertFirestoreOilChange(docSnap);
+    
+    // ✅ VALIDAR PERMISOS (solo admin o superadmin pueden eliminar)
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      await auditLoggingService.logPermissionDenied(
+        user,
+        'delete_service',
+        'admin'
+      );
+      throw new Error('Solo administradores pueden eliminar servicios');
+    }
+    
+    // Validar que pertenezca al lubricentro del usuario (excepto superadmin)
+    if (user.role !== 'superadmin' && user.lubricentroId !== oilChangeData.lubricentroId) {
+      await auditLoggingService.logPermissionDenied(
+        user,
+        'delete_service_other_lubricentro'
+      );
+      throw new Error('No puedes eliminar servicios de otros lubricentros');
+    }
+    
+    // Eliminar el documento
+    await deleteDoc(docRef);
+    
+    console.log('✅ Cambio de aceite eliminado exitosamente');
+    
+    // ✅ REGISTRAR EN AUDITORÍA
+    const lubricentro = await getLubricentroById(oilChangeData.lubricentroId);
+    await auditLoggingService.logEvent(
+      'service_deleted',
+      'DELETE_SERVICE',
+      `Servicio ${oilChangeData.nroCambio} eliminado`,
+      {
+        user,
+        lubricentroId: oilChangeData.lubricentroId,
+        lubricentroName: lubricentro.fantasyName,
+        severity: 'warning',
+        metadata: { 
+          serviceNumber: oilChangeData.nroCambio,
+          vehicleDomain: oilChangeData.dominioVehiculo,
+          clientName: oilChangeData.nombreCliente
+        }
+      }
+    );
+    
+  } catch (error) {
+    console.error('❌ Error al eliminar el cambio de aceite:', error);
+    
+    if (error instanceof Error) {
+      await auditLoggingService.logSystemError(
+        error,
+        'deleteOilChange',
+        user
+      );
+    }
+    
+    throw error;
+  }
+};
+
+// ✅ RE-EXPORTAR FUNCIONES EXISTENTES SIN CAMBIOS
 export const getOilChangeById = async (id: string): Promise<OilChange> => {
   try {
     const docRef = doc(db, COLLECTION_NAME, id);
@@ -75,7 +331,6 @@ export const getOilChangeById = async (id: string): Promise<OilChange> => {
   }
 };
 
-// Obtener cambio de aceite por número
 export const getOilChangeByNumber = async (lubricentroId: string, nroCambio: string): Promise<OilChange | null> => {
   try {
     const q = query(
@@ -97,7 +352,6 @@ export const getOilChangeByNumber = async (lubricentroId: string, nroCambio: str
   }
 };
 
-// Obtener cambios de aceite paginados por lubricentro
 export const getOilChangesByLubricentro = async (
   lubricentroId: string,
   pageSize: number = 20,
@@ -144,7 +398,6 @@ export const getOilChangesByLubricentro = async (
   }
 };
 
-// Búsqueda de cambios de aceite (versión mejorada, insensible a mayúsculas/minúsculas)
 export const searchOilChanges = async (
   lubricentroId: string,
   searchType: 'cliente' | 'dominio',
@@ -186,7 +439,6 @@ export const searchOilChanges = async (
   }
 };
 
-// Obtener próximos cambios de aceite
 export const getUpcomingOilChanges = async (
   lubricentroId: string,
   daysAhead: number = 30
@@ -213,7 +465,6 @@ export const getUpcomingOilChanges = async (
   }
 };
 
-// Obtener cambios de aceite por vehículo (dominio)
 export const getOilChangesByVehicle = async (dominioVehiculo: string): Promise<OilChange[]> => {
   try {
     const dominio = dominioVehiculo.toUpperCase();
@@ -233,126 +484,6 @@ export const getOilChangesByVehicle = async (dominioVehiculo: string): Promise<O
   }
 };
 
-// ✅ CAMBIO PRINCIPAL: Crear cambio de aceite con validación unificada
-export const createOilChange = async (data: Omit<OilChange, 'id' | 'createdAt'>): Promise<string> => {
-  try {
-    console.log('🔄 Iniciando creación de cambio de aceite...');
-    
-    // ✅ NUEVA VALIDACIÓN UNIFICADA
-    const validation = await validateServiceCreation(data.lubricentroId);
-    
-    if (!validation.canCreateService) {
-      console.error('❌ Validación de servicio falló:', validation.message);
-      throw new Error(validation.message || 'No se puede crear el servicio');
-    }
-    
-    console.log('✅ Validación de servicio exitosa');
-    
-    // ✅ INCREMENTAR CONTADOR DE MANERA UNIFICADA
-    const counterUpdated = await incrementServiceCounter(data.lubricentroId);
-    
-    if (!counterUpdated) {
-      throw new Error('Error al actualizar el contador de servicios');
-    }
-    
-    console.log('✅ Contador de servicios actualizado');
-    
-    // Preparar datos para crear el documento
-    const dominioVehiculo = data.dominioVehiculo.toUpperCase();
-    const fechaServicio = ensureDateObject(data.fechaServicio);
-    
-    // Generar fecha del próximo cambio basado en la periodicidad
-    const fechaProximoCambio = new Date(fechaServicio);
-    fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + data.perioricidad_servicio);
-    
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-      ...data,
-      dominioVehiculo,
-      fechaServicio,
-      fechaProximoCambio,
-      fecha: new Date(),
-      createdAt: serverTimestamp()
-    });
-    
-    console.log('✅ Cambio de aceite creado exitosamente:', docRef.id);
-    return docRef.id;
-    
-  } catch (error) {
-    console.error('❌ Error al crear el cambio de aceite:', error);
-    throw error;
-  }
-};
-
-// Actualizar cambio de aceite
-export const updateOilChange = async (id: string, data: Partial<OilChange>): Promise<void> => {
-  try {
-    const docRef = doc(db, COLLECTION_NAME, id);
-    
-    const updateData: any = { ...data };
-    
-    if (data.dominioVehiculo) {
-      updateData.dominioVehiculo = data.dominioVehiculo.toUpperCase();
-    }
-    
-    if (data.fechaServicio) {
-      updateData.fechaServicio = ensureDateObject(data.fechaServicio);
-    }
-    
-    if (data.fechaServicio || data.perioricidad_servicio) {
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        throw new Error('El cambio de aceite no existe');
-      }
-      
-      const currentData = docSnap.data();
-      
-      let fechaServicioToUse;
-      if (data.fechaServicio) {
-        fechaServicioToUse = ensureDateObject(data.fechaServicio);
-      } else {
-        try {
-          if (currentData.fechaServicio && typeof currentData.fechaServicio.toDate === 'function') {
-            fechaServicioToUse = currentData.fechaServicio.toDate();
-          } else {
-            fechaServicioToUse = new Date(currentData.fechaServicio);
-          }
-        } catch (e) {
-          console.warn('Error al convertir fechaServicio existente:', e);
-          fechaServicioToUse = new Date();
-        }
-      }
-      
-      const perioricidad = data.perioricidad_servicio !== undefined ? data.perioricidad_servicio : currentData.perioricidad_servicio;
-      
-      const fechaProximoCambio = new Date(fechaServicioToUse);
-      fechaProximoCambio.setMonth(fechaProximoCambio.getMonth() + perioricidad);
-      
-      updateData.fechaProximoCambio = fechaProximoCambio;
-    }
-    
-    const { id: _, createdAt: __, lubricentroId: ___, ...cleanData } = updateData;
-    
-    await updateDoc(docRef, {
-      ...cleanData,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error al actualizar el cambio de aceite:', error);
-    throw error;
-  }
-};
-
-// Eliminar cambio de aceite
-export const deleteOilChange = async (id: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
-  } catch (error) {
-    console.error('Error al eliminar el cambio de aceite:', error);
-    throw error;
-  }
-};
-
-// Generar el próximo número de cambio
 export const getNextOilChangeNumber = async (lubricentroId: string, prefix: string): Promise<string> => {
   try {
     const q = query(
@@ -383,7 +514,6 @@ export const getNextOilChangeNumber = async (lubricentroId: string, prefix: stri
   }
 };
 
-// Obtener estadísticas de cambios de aceite
 export const getOilChangesStats = async (lubricentroId: string): Promise<OilChangeStats> => {
   try {
     const qTotal = query(
@@ -442,9 +572,6 @@ export const getOilChangesStats = async (lubricentroId: string): Promise<OilChan
   }
 };
 
-/**
- * Obtiene los cambios de aceite realizados por un operador específico
- */
 export const getOilChangesByOperator = async (
   operatorId: string,
   lubricentroId: string,
@@ -469,3 +596,9 @@ export const getOilChangesByOperator = async (
     throw error;
   }
 };
+
+// ✅ MANTENER COMPATIBILIDAD CON CÓDIGO EXISTENTE
+// Exportar la función original con el nuevo nombre como alias
+export const createOilChange = createOilChangeWithValidation;
+export const updateOilChange = updateOilChangeWithValidation;
+export const deleteOilChange = deleteOilChangeWithValidation;

@@ -1,30 +1,22 @@
-// src/layouts/MainLayout.tsx
+// src/layouts/UserLayout.tsx
 import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import hismaLogo from '../assets/img/hisma_logo_horizontal.png';
 
-// Heroicons
+// Heroicons para usuarios normales
 import { 
   Bars3Icon, 
   XMarkIcon,
   HomeIcon,
-  ChartBarIcon,
-  UserIcon,
   UserGroupIcon,
   WrenchIcon,
   CalendarIcon,
-  ClipboardDocumentListIcon,
+  UserIcon,
   ArrowLeftOnRectangleIcon,
   BellIcon,
-  Cog6ToothIcon,
-  BuildingStorefrontIcon,
-  BuildingOfficeIcon, 
-  QuestionMarkCircleIcon,
-  MagnifyingGlassIcon,
-  CreditCardIcon,
-  DocumentChartBarIcon,
-  CurrencyDollarIcon
+  ChartBarIcon,
+  QuestionMarkCircleIcon
 } from '@heroicons/react/24/outline';
 
 // Componente de carga
@@ -34,10 +26,9 @@ const LoadingScreen = () => (
   </div>
 );
 
-const MainLayout: React.FC = () => {
+const UserLayout: React.FC = () => {
   const { currentUser, userProfile, logout, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   
   // Estados
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -47,15 +38,22 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (!loading && !currentUser) {
       navigate('/login');
+      return;
     }
-  }, [currentUser, navigate, loading]);
+    
+    // Redirigir superadmin a su panel
+    if (!loading && userProfile && userProfile.role === 'superadmin') {
+      navigate('/superadmin/dashboard');
+      return;
+    }
+  }, [currentUser, userProfile, navigate, loading]);
   
   // No renderizar nada hasta que se confirme la autenticación
   if (loading) {
     return <LoadingScreen />;
   }
   
-  if (!currentUser || !userProfile) {
+  if (!currentUser || !userProfile || userProfile.role === 'superadmin') {
     return null;
   }
   
@@ -69,53 +67,11 @@ const MainLayout: React.FC = () => {
     }
   };
   
-  // Opciones de menú para diferentes roles
+  // Menú específico para usuarios normales (admin y user)
   const getMenuItems = () => {
     const items = [];
     
-    // Para superadmin, mostrar menú especializado
-    if (userProfile.role === 'superadmin') {
-      return [
-        { 
-          text: 'Dashboard', 
-          icon: <HomeIcon className="w-5 h-5" />, 
-          path: '/dashboard',
-          divider: false
-        },
-        { 
-          text: 'Gestión de Lubricentros', 
-          icon: <BuildingOfficeIcon className="w-5 h-5" />, 
-          path: '/superadmin/lubricentros',
-          divider: false
-        },
-        { 
-          text: 'Planes de Suscripción', 
-          icon: <CreditCardIcon className="w-5 h-5" />, 
-          path: '/superadmin/suscripciones/planes',
-          divider: false
-        },
-        { 
-          text: 'Estadísticas de Suscripciones', 
-          icon: <DocumentChartBarIcon className="w-5 h-5" />, 
-          path: '/superadmin/suscripciones/estadisticas',
-          divider: false
-        },
-        { 
-          text: 'Estadísticas Globales', 
-          icon: <ChartBarIcon className="w-5 h-5" />, 
-          path: '/superadmin/reportes',
-          divider: true
-        },
-        { 
-          text: 'Mi Perfil', 
-          icon: <UserIcon className="w-5 h-5" />, 
-          path: '/perfil',
-          divider: false
-        }
-      ];
-    }
-    
-    // Para usuarios que NO son superadmin (admin y user)
+    // Para todos los usuarios normales
     items.push(
       { 
         text: 'Dashboard', 
@@ -131,7 +87,7 @@ const MainLayout: React.FC = () => {
       },
     );
     
-    // Para admin
+    // Solo para admin
     if (userProfile.role === 'admin') {
       items.push(
         { 
@@ -149,7 +105,7 @@ const MainLayout: React.FC = () => {
       );
     }
     
-    // Para todos los usuarios que no son superadmin (continuación)
+    // Para todos los usuarios normales (continuación)
     items.push(
       { 
         text: 'Próximos Servicios', 
@@ -185,7 +141,6 @@ const MainLayout: React.FC = () => {
   // Obtener el nombre del rol
   const getRoleName = (role: string) => {
     switch (role) {
-      case 'superadmin': return 'Super Admin';
       case 'admin': return 'Administrador';
       case 'user': return 'Empleado';
       default: return 'Usuario';
@@ -340,12 +295,7 @@ const MainLayout: React.FC = () => {
           <div className="flex-1 px-4 flex justify-between">
             <div className="flex-1 flex items-center">
               <h1 className="text-lg font-semibold text-gray-900">
-                {userProfile?.lubricentroId && userProfile.role !== 'superadmin' && (
-                  <span>Panel de Control</span>
-                )}
-                {userProfile.role === 'superadmin' && (
-                  <span>Panel de Administración</span>
-                )}
+                Panel de Control
               </h1>
             </div>
             <div className="ml-4 flex items-center md:ml-6">
@@ -383,51 +333,21 @@ const MainLayout: React.FC = () => {
                     <div className="block px-4 py-2 text-xs text-gray-400">
                       {`${userProfile.nombre} ${userProfile.apellido}`}
                     </div>
+                    <div className="block px-4 py-1 text-xs text-blue-600 border-b border-gray-100 mb-1">
+                      {getRoleName(userProfile.role)}
+                    </div>
                     <NavLink
                       to="/perfil"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       Mi Perfil
                     </NavLink>
-                    
-                    {/* Menú específico para superadmin */}
-                    {userProfile.role === 'superadmin' && (
-                      <>
-                        <div className="border-t border-gray-100 my-1"></div>
-                        <NavLink
-                          to="/superadmin/lubricentros"
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <BuildingOfficeIcon className="inline h-4 w-4 mr-2" />
-                          Lubricentros
-                        </NavLink>
-                        <NavLink
-                          to="/superadmin/suscripciones/planes"
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <CreditCardIcon className="inline h-4 w-4 mr-2" />
-                          Planes
-                        </NavLink>
-                        <NavLink
-                          to="/superadmin/suscripciones/estadisticas"
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <DocumentChartBarIcon className="inline h-4 w-4 mr-2" />
-                          Estadísticas
-                        </NavLink>
-                      </>
-                    )}
-                    
-                    {/* Menú para usuarios normales */}
-                    {userProfile.role !== 'superadmin' && (
-                      <NavLink
-                        to="/soporte"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        Soporte
-                      </NavLink>
-                    )}
-                    
+                    <NavLink
+                      to="/soporte"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Soporte
+                    </NavLink>
                     <div className="border-t border-gray-100"></div>
                     <button
                       onClick={handleLogout}
@@ -455,4 +375,4 @@ const MainLayout: React.FC = () => {
   );
 };
 
-export default MainLayout;
+export default UserLayout;

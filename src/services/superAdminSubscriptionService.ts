@@ -2,429 +2,404 @@
 import { 
   collection, 
   doc, 
-  getDoc, 
+  updateDoc, 
+  deleteDoc, 
   getDocs, 
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp 
+  getDoc, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  Timestamp 
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { Lubricentro, LubricentroStatus } from '../types';
-import { SUBSCRIPTION_PLANS, SubscriptionPlanType } from '../types/subscription';
-import unifiedSubscriptionService from './unifiedSubscriptionService';
+import { db } from '../config/firebase';
+import { 
+  Lubricentro, 
+  SubscriptionPlanType, 
+  SubscriptionAction,
+  SuperAdminSubscriptionOverview 
+} from '../types';
+import { auditLoggingService } from './auditLoggingService';
 
-// ✅ TIPOS ESPECÍFICOS PARA SUPERADMIN
-export interface SuperAdminSubscriptionOverview {
+// Tipos específicos para SuperAdmin
+export interface SubscriptionUpdate {
   lubricentroId: string;
-  fantasyName: string;
-  responsable: string;
-  email: string;
-  estado: LubricentroStatus;
-  subscriptionPlan?: SubscriptionPlanType;
-  subscriptionEndDate?: Date;
-  trialEndDate?: Date;
-  servicesUsedThisMonth: number;
-  activeUserCount: number;
-  monthlyRevenue: number;
+  subscriptionPlan: SubscriptionPlanType | 'custom';
+  renewalType: 'manual' | 'automatic';
+  notes?: string;
+}
+
+export interface BatchActionResult {
+  successful: string[];
+  failed: Array<{
+    lubricentroId: string;
+    error: string;
+  }>;
+}
+
+export interface LubricentroWithAttention extends Lubricentro {
+  attentionType: 'trial_ending' | 'subscription_expired' | 'payment_overdue';
   daysRemaining?: number;
-  isExpiring: boolean;
-  needsAttention: boolean;
-  createdAt: Date;
 }
 
-export interface SubscriptionAction {
-  type: 'activate' | 'deactivate' | 'extend_trial' | 'change_plan' | 'reset_services';
-  lubricentroId: string;
-  parameters?: {
-    subscriptionPlan?: SubscriptionPlanType;
-    renewalType?: 'monthly' | 'semiannual';
-    additionalDays?: number;
-    reason?: string;
-  };
-}
+const SUBSCRIPTION_PLANS = {
+  basic: {
+    name: 'Básico',
+    monthlyPrice: 9900,
+    yearlyPrice: 99000,
+    servicesLimit: 100,
+    features: ['Gestión básica', 'Reportes simples']
+  },
+  premium: {
+    name: 'Premium', 
+    monthlyPrice: 19900,
+    yearlyPrice: 199000,
+    servicesLimit: 500,
+    features: ['Gestión avanzada', 'Reportes detallados', 'API']
+  },
+  enterprise: {
+    name: 'Enterprise',
+    monthlyPrice: 39900,
+    yearlyPrice: 399000,
+    servicesLimit: -1,
+    features: ['Sin límites', 'Soporte prioritario', 'Personalización']
+  }
+};
 
-export interface GlobalSubscriptionStats {
-  totalLubricentros: number;
-  activeSubscriptions: number;
-  trialSubscriptions: number;
-  expiredSubscriptions: number;
-  totalMonthlyRevenue: number;
-  averageRevenuePerUser: number;
-  conversionRate: number;
-  expiringTrialsCount: number;
-  planDistribution: Record<SubscriptionPlanType, number>;
-  revenueByPlan: Record<SubscriptionPlanType, number>;
-}
-
-// ✅ CLASE PRINCIPAL PARA GESTIÓN DE SUPERADMIN
-class SuperAdminSubscriptionService {
+export class SuperAdminSubscriptionService {
+  private readonly COLLECTION_NAME = 'lubricentros';
+  private readonly SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 
   /**
-   * Obtiene vista general de todas las suscripciones
+   * Obtiene resumen completo de suscripciones para SuperAdmin
    */
-  async getAllSubscriptionsOverview(): Promise<SuperAdminSubscriptionOverview[]> {
+  async getSubscriptionOverview(): Promise<SuperAdminSubscriptionOverview[]> {
     try {
-      const q = query(
-        collection(db, 'lubricentros'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const today = new Date();
+      const lubricentrosRef = collection(db, this.COLLECTION_NAME);
+      const snapshot = await getDocs(lubricentrosRef);
       
       const overviews: SuperAdminSubscriptionOverview[] = [];
       
-      for (const docSnap of querySnapshot.docs) {
-        const data = docSnap.data();
-        const lubricentro: Lubricentro = {
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          trialEndDate: data.trialEndDate?.toDate(),
-          subscriptionEndDate: data.subscriptionEndDate?.toDate(),
-        } as Lubricentro;
-        
-        // Calcular días restantes
-        let daysRemaining: number | undefined;
-        if (lubricentro.estado === 'trial' && lubricentro.trialEndDate) {
-          const diffTime = lubricentro.trialEndDate.getTime() - today.getTime();
-          daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-        } else if (lubricentro.estado === 'activo' && lubricentro.subscriptionEndDate) {
-          const diffTime = lubricentro.subscriptionEndDate.getTime() - today.getTime();
-          daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-        }
-        
-        // Calcular ingresos mensuales
-        let monthlyRevenue = 0;
-        if (lubricentro.subscriptionPlan && SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan]) {
-          monthlyRevenue = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan].price.monthly;
-        }
-        
-        // Determinar si necesita atención
-        const isExpiring = (daysRemaining !== undefined && daysRemaining <= 7);
-        const needsAttention = isExpiring || 
-          lubricentro.estado === 'inactivo' || 
-          (lubricentro.estado === 'trial' && (daysRemaining === undefined || daysRemaining === 0));
+      for (const docSnap of snapshot.docs) {
+        const lubricentro = { id: docSnap.id, ...docSnap.data() } as Lubricentro;
         
         const overview: SuperAdminSubscriptionOverview = {
-          lubricentroId: lubricentro.id,
+          lubricentroId: lubricentro.id!,
           fantasyName: lubricentro.fantasyName,
           responsable: lubricentro.responsable,
-          email: lubricentro.email,
-          estado: lubricentro.estado,
-          subscriptionPlan: lubricentro.subscriptionPlan,
-          subscriptionEndDate: lubricentro.subscriptionEndDate,
-          trialEndDate: lubricentro.trialEndDate,
-          servicesUsedThisMonth: lubricentro.servicesUsedThisMonth || 0,
-          activeUserCount: lubricentro.activeUserCount || 1,
-          monthlyRevenue,
-          daysRemaining,
-          isExpiring,
-          needsAttention,
-          createdAt: lubricentro.createdAt
+          subscriptionStatus: lubricentro.subscriptionStatus || 'trial',
+          subscriptionPlan: lubricentro.subscriptionPlan || 'basic',
+          currentPeriodEnd: lubricentro.currentPeriodEnd || new Date(),
+          servicesCount: lubricentro.servicesCount || 0,
+          servicesLimit: this.getServicesLimit(lubricentro.subscriptionPlan || 'basic'),
+          isTrialActive: this.isTrialActive(lubricentro),
+          daysUntilExpiration: this.getDaysUntilExpiration(lubricentro),
+          revenue: this.calculateRevenue(lubricentro),
+          lastPaymentDate: lubricentro.lastPaymentDate,
+          autoRenewal: lubricentro.autoRenewal || false
         };
         
         overviews.push(overview);
       }
       
-      return overviews;
-      
+      return overviews.sort((a, b) => 
+        new Date(b.currentPeriodEnd).getTime() - new Date(a.currentPeriodEnd).getTime()
+      );
     } catch (error) {
-      console.error('Error al obtener vista general de suscripciones:', error);
-      throw error;
+      console.error('Error getting subscription overview:', error);
+      throw new Error('Error al obtener resumen de suscripciones');
     }
   }
 
   /**
-   * Obtiene estadísticas globales del sistema
-   */
-  async getGlobalStats(): Promise<GlobalSubscriptionStats> {
-    try {
-      const overviews = await this.getAllSubscriptionsOverview();
-      
-      const activeSubscriptions = overviews.filter(o => o.estado === 'activo').length;
-      const trialSubscriptions = overviews.filter(o => o.estado === 'trial').length;
-      const expiredSubscriptions = overviews.filter(o => o.estado === 'inactivo').length;
-      
-      const totalMonthlyRevenue = overviews
-        .filter(o => o.estado === 'activo')
-        .reduce((total, o) => total + o.monthlyRevenue, 0);
-      
-      const averageRevenuePerUser = activeSubscriptions > 0 
-        ? totalMonthlyRevenue / activeSubscriptions 
-        : 0;
-      
-      const conversionRate = (trialSubscriptions + activeSubscriptions) > 0 
-        ? (activeSubscriptions / (trialSubscriptions + activeSubscriptions)) * 100 
-        : 0;
-      
-      const expiringTrialsCount = overviews.filter(o => o.isExpiring).length;
-      
-      // Distribución por planes
-      const planDistribution: Record<SubscriptionPlanType, number> = 
-        Object.keys(SUBSCRIPTION_PLANS).reduce((acc, plan) => {
-          acc[plan as SubscriptionPlanType] = 0;
-          return acc;
-        }, {} as Record<SubscriptionPlanType, number>);
-      
-      const revenueByPlan: Record<SubscriptionPlanType, number> = 
-        Object.keys(SUBSCRIPTION_PLANS).reduce((acc, plan) => {
-          acc[plan as SubscriptionPlanType] = 0;
-          return acc;
-        }, {} as Record<SubscriptionPlanType, number>);
-      
-      overviews.forEach(overview => {
-        if (overview.subscriptionPlan && overview.estado === 'activo') {
-          planDistribution[overview.subscriptionPlan]++;
-          revenueByPlan[overview.subscriptionPlan] += overview.monthlyRevenue;
-        }
-      });
-      
-      return {
-        totalLubricentros: overviews.length,
-        activeSubscriptions,
-        trialSubscriptions,
-        expiredSubscriptions,
-        totalMonthlyRevenue,
-        averageRevenuePerUser,
-        conversionRate,
-        expiringTrialsCount,
-        planDistribution,
-        revenueByPlan
-      };
-      
-    } catch (error) {
-      console.error('Error al obtener estadísticas globales:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Activa una suscripción desde el panel de superadmin
+   * Activa suscripción para un lubricentro específico
    */
   async activateSubscriptionForLubricentro(
     lubricentroId: string,
-    subscriptionPlan: SubscriptionPlanType,
-    renewalType: 'monthly' | 'semiannual' = 'monthly',
+    subscriptionPlan: SubscriptionPlanType | 'custom' = 'basic',
+    renewalType: 'manual' | 'automatic' = 'manual',
     notes?: string
-  ): Promise<void> => {
+  ): Promise<void> {
     try {
-      console.log(`🔄 SuperAdmin activando suscripción para ${lubricentroId}...`);
+      if (!lubricentroId) {
+        throw new Error('lubricentroId es requerido');
+      }
+
+      const lubricentroRef = doc(db, this.COLLECTION_NAME, lubricentroId);
+      const lubricentroDoc = await getDoc(lubricentroRef);
       
-      // Usar el servicio unificado
-      await unifiedSubscriptionService.activateSubscription(
-        lubricentroId, 
-        subscriptionPlan, 
-        renewalType
-      );
-      
-      // Registrar la acción (en una implementación completa, esto iría a una tabla de auditoría)
-      console.log(`✅ Suscripción activada por SuperAdmin:`, {
-        lubricentroId,
+      if (!lubricentroDoc.exists()) {
+        throw new Error(`Lubricentro con ID ${lubricentroId} no encontrado`);
+      }
+
+      const plan = subscriptionPlan !== 'custom' ? SUBSCRIPTION_PLANS[subscriptionPlan] : null;
+      const currentDate = new Date();
+      const endDate = new Date(currentDate);
+      endDate.setMonth(endDate.getMonth() + 1); // 1 mes por defecto
+
+      const updateData = {
+        subscriptionStatus: 'active' as const,
         subscriptionPlan,
-        renewalType,
-        notes,
-        timestamp: new Date()
+        currentPeriodStart: Timestamp.fromDate(currentDate),
+        currentPeriodEnd: Timestamp.fromDate(endDate),
+        autoRenewal: renewalType === 'automatic',
+        servicesLimit: plan?.servicesLimit || -1,
+        lastPaymentDate: Timestamp.fromDate(currentDate),
+        updatedAt: Timestamp.fromDate(currentDate)
+      };
+
+      await updateDoc(lubricentroRef, updateData);
+
+      // Log de auditoría
+      await auditLoggingService.logSubscriptionAction({
+        lubricentroId,
+        action: 'activation',
+        details: {
+          subscriptionPlan,
+          renewalType,
+          notes
+        },
+        adminId: 'superadmin', // En producción, obtener del contexto de auth
+        timestamp: currentDate
       });
-      
+
     } catch (error) {
-      console.error('Error al activar suscripción desde SuperAdmin:', error);
+      console.error('Error activating subscription:', error);
       throw error;
     }
   }
 
   /**
-   * Desactiva una suscripción desde el panel de superadmin
+   * Desactiva suscripción para un lubricentro
    */
   async deactivateSubscriptionForLubricentro(
     lubricentroId: string,
     reason?: string
-  ): Promise<void> => {
+  ): Promise<void> {
     try {
-      console.log(`⚠️ SuperAdmin desactivando suscripción para ${lubricentroId}...`);
+      if (!lubricentroId) {
+        throw new Error('lubricentroId es requerido');
+      }
+
+      const lubricentroRef = doc(db, this.COLLECTION_NAME, lubricentroId);
+      const lubricentroDoc = await getDoc(lubricentroRef);
       
-      // Usar el servicio unificado
-      await unifiedSubscriptionService.deactivateSubscription(lubricentroId, reason);
-      
-      // Registrar la acción
-      console.log(`❌ Suscripción desactivada por SuperAdmin:`, {
+      if (!lubricentroDoc.exists()) {
+        throw new Error(`Lubricentro con ID ${lubricentroId} no encontrado`);
+      }
+
+      const updateData = {
+        subscriptionStatus: 'inactive' as const,
+        currentPeriodEnd: Timestamp.fromDate(new Date()),
+        autoRenewal: false,
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+
+      await updateDoc(lubricentroRef, updateData);
+
+      // Log de auditoría
+      await auditLoggingService.logSubscriptionAction({
         lubricentroId,
-        reason,
+        action: 'deactivation',
+        details: { reason },
+        adminId: 'superadmin',
         timestamp: new Date()
       });
-      
+
     } catch (error) {
-      console.error('Error al desactivar suscripción desde SuperAdmin:', error);
+      console.error('Error deactivating subscription:', error);
       throw error;
     }
   }
 
   /**
-   * Extiende el período de prueba desde el panel de superadmin
+   * Extiende período de prueba para un lubricentro
    */
   async extendTrialForLubricentro(
     lubricentroId: string,
     additionalDays: number,
     reason?: string
-  ): Promise<void> => {
+  ): Promise<void> {
     try {
-      console.log(`⏱️ SuperAdmin extendiendo prueba para ${lubricentroId}: +${additionalDays} días`);
+      if (!lubricentroId) {
+        throw new Error('lubricentroId es requerido');
+      }
+
+      const lubricentroRef = doc(db, this.COLLECTION_NAME, lubricentroId);
+      const lubricentroDoc = await getDoc(lubricentroRef);
       
-      // Usar el servicio unificado
-      await unifiedSubscriptionService.extendTrialPeriod(lubricentroId, additionalDays);
-      
-      // Registrar la acción
-      console.log(`⏰ Período de prueba extendido por SuperAdmin:`, {
+      if (!lubricentroDoc.exists()) {
+        throw new Error(`Lubricentro con ID ${lubricentroId} no encontrado`);
+      }
+
+      const currentTrialEnd = lubricentroDoc.data()?.trialEndDate?.toDate() || new Date();
+      const newTrialEnd = new Date(currentTrialEnd);
+      newTrialEnd.setDate(newTrialEnd.getDate() + additionalDays);
+
+      const updateData = {
+        trialEndDate: Timestamp.fromDate(newTrialEnd),
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+
+      await updateDoc(lubricentroRef, updateData);
+
+      // Log de auditoría
+      await auditLoggingService.logSubscriptionAction({
         lubricentroId,
-        additionalDays,
-        reason,
+        action: 'trial_extension',
+        details: {
+          additionalDays,
+          newTrialEnd: newTrialEnd.toISOString(),
+          reason
+        },
+        adminId: 'superadmin',
         timestamp: new Date()
       });
-      
+
     } catch (error) {
-      console.error('Error al extender período de prueba desde SuperAdmin:', error);
+      console.error('Error extending trial:', error);
       throw error;
     }
   }
 
   /**
-   * Cambia el plan de suscripción
+   * Cambia plan de suscripción para un lubricentro
    */
   async changePlanForLubricentro(
     lubricentroId: string,
     newPlan: SubscriptionPlanType,
-    renewalType: 'monthly' | 'semiannual' = 'monthly'
-  ): Promise<void> => {
+    renewalType: 'manual' | 'automatic' = 'manual'
+  ): Promise<void> {
     try {
-      console.log(`🔄 SuperAdmin cambiando plan para ${lubricentroId} a ${newPlan}...`);
-      
-      const lubricentro = await this.getLubricentroById(lubricentroId);
-      
-      if (lubricentro.estado !== 'activo') {
-        throw new Error('Solo se puede cambiar el plan de lubricentros activos');
+      if (!lubricentroId) {
+        throw new Error('lubricentroId es requerido');
       }
+
+      const lubricentroRef = doc(db, this.COLLECTION_NAME, lubricentroId);
+      const plan = SUBSCRIPTION_PLANS[newPlan];
       
-      // Actualizar el plan manteniendo las fechas existentes si es un upgrade/downgrade
-      const now = new Date();
-      const subscriptionEndDate = new Date(now);
-      
-      if (renewalType === 'monthly') {
-        subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 1);
+      if (!plan) {
+        throw new Error(`Plan ${newPlan} no válido`);
+      }
+
+      const currentDate = new Date();
+      let endDate: Date;
+
+      if (renewalType === 'automatic') {
+        endDate = new Date(currentDate);
+        endDate.setMonth(endDate.getMonth() + 1);
       } else {
-        subscriptionEndDate.setMonth(subscriptionEndDate.getMonth() + 6);
+        // Para renovación manual, mantener la fecha actual de fin
+        const lubricentroDoc = await getDoc(lubricentroRef);
+        endDate = lubricentroDoc.data()?.currentPeriodEnd?.toDate() || new Date();
       }
-      
-      await updateDoc(doc(db, 'lubricentros', lubricentroId), {
+
+      const updateData = {
         subscriptionPlan: newPlan,
-        subscriptionRenewalType: renewalType,
-        subscriptionEndDate,
-        nextPaymentDate: subscriptionEndDate,
-        updatedAt: serverTimestamp()
+        servicesLimit: plan.servicesLimit,
+        autoRenewal: renewalType === 'automatic',
+        updatedAt: Timestamp.fromDate(currentDate)
+      };
+
+      await updateDoc(lubricentroRef, updateData);
+
+      // Log de auditoría
+      await auditLoggingService.logSubscriptionAction({
+        lubricentroId,
+        action: 'plan_change',
+        details: {
+          newPlan,
+          renewalType
+        },
+        adminId: 'superadmin',
+        timestamp: currentDate
       });
-      
-      console.log(`✅ Plan cambiado exitosamente por SuperAdmin`);
-      
+
     } catch (error) {
-      console.error('Error al cambiar plan desde SuperAdmin:', error);
+      console.error('Error changing plan:', error);
       throw error;
     }
   }
 
   /**
-   * Reinicia el contador de servicios mensuales
+   * Resetea contador de servicios para un lubricentro
    */
   async resetServicesCounterForLubricentro(
     lubricentroId: string,
     reason?: string
-  ): Promise<void> => {
+  ): Promise<void> {
     try {
-      console.log(`🔄 SuperAdmin reiniciando contador de servicios para ${lubricentroId}...`);
+      if (!lubricentroId) {
+        throw new Error('lubricentroId es requerido');
+      }
+
+      const lubricentroRef = doc(db, this.COLLECTION_NAME, lubricentroId);
       
-      await updateDoc(doc(db, 'lubricentros', lubricentroId), {
-        servicesUsedThisMonth: 0,
-        updatedAt: serverTimestamp()
-      });
-      
-      console.log(`✅ Contador de servicios reiniciado por SuperAdmin:`, {
+      const updateData = {
+        servicesCount: 0,
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+
+      await updateDoc(lubricentroRef, updateData);
+
+      // Log de auditoría
+      await auditLoggingService.logSubscriptionAction({
         lubricentroId,
-        reason,
+        action: 'services_reset',
+        details: { reason },
+        adminId: 'superadmin',
         timestamp: new Date()
       });
-      
+
     } catch (error) {
-      console.error('Error al reiniciar contador de servicios:', error);
+      console.error('Error resetting services counter:', error);
       throw error;
     }
   }
 
   /**
-   * Ejecuta múltiples acciones en lote
+   * Ejecuta acciones en lote para múltiples lubricentros
    */
-  async executeBatchActions(actions: SubscriptionAction[]): Promise<{
-    successful: string[];
-    failed: { lubricentroId: string; error: string }[];
-  }> {
+  async executeBatchActions(actions: SubscriptionAction[]): Promise<BatchActionResult> {
     const successful: string[] = [];
-    const failed: { lubricentroId: string; error: string }[] = [];
-    
+    const failed: Array<{ lubricentroId: string; error: string }> = [];
+
     for (const action of actions) {
       try {
         switch (action.type) {
           case 'activate':
-            if (!action.parameters?.subscriptionPlan) {
-              throw new Error('Plan de suscripción requerido para activación');
-            }
             await this.activateSubscriptionForLubricentro(
               action.lubricentroId,
-              action.parameters.subscriptionPlan,
-              action.parameters.renewalType
+              action.subscriptionPlan,
+              action.renewalType
             );
             break;
-            
+          
           case 'deactivate':
             await this.deactivateSubscriptionForLubricentro(
               action.lubricentroId,
-              action.parameters?.reason
+              action.reason
             );
             break;
-            
+          
           case 'extend_trial':
-            if (!action.parameters?.additionalDays) {
-              throw new Error('Días adicionales requeridos para extensión');
-            }
             await this.extendTrialForLubricentro(
               action.lubricentroId,
-              action.parameters.additionalDays,
-              action.parameters.reason
+              action.additionalDays || 7,
+              action.reason
             );
             break;
-            
-          case 'change_plan':
-            if (!action.parameters?.subscriptionPlan) {
-              throw new Error('Nuevo plan requerido para cambio');
-            }
-            await this.changePlanForLubricentro(
-              action.lubricentroId,
-              action.parameters.subscriptionPlan,
-              action.parameters.renewalType
-            );
-            break;
-            
+          
           case 'reset_services':
             await this.resetServicesCounterForLubricentro(
               action.lubricentroId,
-              action.parameters?.reason
+              action.reason
             );
             break;
-            
-          default:
-            throw new Error(`Tipo de acción no reconocido: ${action.type}`);
         }
         
         successful.push(action.lubricentroId);
-        
       } catch (error) {
         failed.push({
           lubricentroId: action.lubricentroId,
@@ -432,72 +407,114 @@ class SuperAdminSubscriptionService {
         });
       }
     }
-    
+
     return { successful, failed };
   }
 
   /**
    * Obtiene lubricentros que necesitan atención
    */
-  async getLubricentrosNeedingAttention(): Promise<SuperAdminSubscriptionOverview[]> {
+  async getLubricentrosNeedingAttention(): Promise<LubricentroWithAttention[]> {
     try {
-      const allOverviews = await this.getAllSubscriptionsOverview();
-      return allOverviews.filter(overview => overview.needsAttention);
+      const lubricentrosRef = collection(db, this.COLLECTION_NAME);
+      const snapshot = await getDocs(lubricentrosRef);
+      
+      const needingAttention: LubricentroWithAttention[] = [];
+      
+      for (const docSnap of snapshot.docs) {
+        const lubricentro = { id: docSnap.id, ...docSnap.data() } as Lubricentro;
+        const attention = this.checkAttentionNeeded(lubricentro);
+        
+        if (attention) {
+          needingAttention.push({
+            ...lubricentro,
+            attentionType: attention.type,
+            daysRemaining: attention.daysRemaining
+          });
+        }
+      }
+      
+      return needingAttention;
     } catch (error) {
-      console.error('Error al obtener lubricentros que necesitan atención:', error);
+      console.error('Error getting lubricentros needing attention:', error);
       throw error;
     }
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  /**
+   * Obtiene lubricentro por ID (para SuperAdmin)
+   */
+  async getLubricentroById(id: string): Promise<Lubricentro | null> {
+    try {
+      const docRef = doc(db, this.COLLECTION_NAME, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Lubricentro;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting lubricentro by ID:', error);
+      throw error;
+    }
+  }
 
-  private async getLubricentroById(id: string): Promise<Lubricentro> {
-    const docRef = doc(db, 'lubricentros', id);
-    const docSnap = await getDoc(docRef);
+  // Métodos auxiliares privados
+  private getServicesLimit(plan: SubscriptionPlanType): number {
+    return SUBSCRIPTION_PLANS[plan]?.servicesLimit || 100;
+  }
+
+  private isTrialActive(lubricentro: Lubricentro): boolean {
+    if (lubricentro.subscriptionStatus !== 'trial') return false;
+    const trialEnd = lubricentro.trialEndDate?.toDate() || new Date();
+    return trialEnd > new Date();
+  }
+
+  private getDaysUntilExpiration(lubricentro: Lubricentro): number {
+    const endDate = lubricentro.currentPeriodEnd?.toDate() || 
+                   lubricentro.trialEndDate?.toDate() || 
+                   new Date();
+    const now = new Date();
+    const diffTime = endDate.getTime() - now.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  private calculateRevenue(lubricentro: Lubricentro): number {
+    if (lubricentro.subscriptionStatus !== 'active') return 0;
+    const plan = SUBSCRIPTION_PLANS[lubricentro.subscriptionPlan as SubscriptionPlanType];
+    return plan?.monthlyPrice || 0;
+  }
+
+  private checkAttentionNeeded(lubricentro: Lubricentro): {
+    type: 'trial_ending' | 'subscription_expired' | 'payment_overdue';
+    daysRemaining: number;
+  } | null {
+    const now = new Date();
     
-    if (!docSnap.exists()) {
-      throw new Error('No se encontró el lubricentro');
+    // Verificar trial próximo a vencer
+    if (lubricentro.subscriptionStatus === 'trial') {
+      const trialEnd = lubricentro.trialEndDate?.toDate() || new Date();
+      const daysRemaining = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysRemaining <= 3 && daysRemaining >= 0) {
+        return { type: 'trial_ending', daysRemaining };
+      }
     }
     
-    const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      ...data,
-      createdAt: data.createdAt?.toDate() || new Date(),
-      trialEndDate: data.trialEndDate?.toDate(),
-      subscriptionStartDate: data.subscriptionStartDate?.toDate(),
-      subscriptionEndDate: data.subscriptionEndDate?.toDate(),
-      updatedAt: data.updatedAt?.toDate(),
-    } as Lubricentro;
+    // Verificar suscripción vencida
+    if (lubricentro.subscriptionStatus === 'active') {
+      const periodEnd = lubricentro.currentPeriodEnd?.toDate() || new Date();
+      const daysRemaining = Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysRemaining < 0) {
+        return { type: 'subscription_expired', daysRemaining: Math.abs(daysRemaining) };
+      }
+    }
+    
+    return null;
   }
 }
 
-// ✅ EXPORTAR INSTANCIA SINGLETON
+// Instancia singleton para uso en toda la aplicación
 export const superAdminSubscriptionService = new SuperAdminSubscriptionService();
-
-// ✅ FUNCIONES DE CONVENIENCIA
-export const getAllSubscriptionsOverview = () => 
-  superAdminSubscriptionService.getAllSubscriptionsOverview();
-
-export const getGlobalSubscriptionStats = () => 
-  superAdminSubscriptionService.getGlobalStats();
-
-export const activateSubscriptionForLubricentro = (
-  lubricentroId: string,
-  subscriptionPlan: SubscriptionPlanType,
-  renewalType: 'monthly' | 'semiannual' = 'monthly',
-  notes?: string
-) => superAdminSubscriptionService.activateSubscriptionForLubricentro(
-  lubricentroId, subscriptionPlan, renewalType, notes
-);
-
-export const deactivateSubscriptionForLubricentro = (lubricentroId: string, reason?: string) => 
-  superAdminSubscriptionService.deactivateSubscriptionForLubricentro(lubricentroId, reason);
-
-export const extendTrialForLubricentro = (lubricentroId: string, additionalDays: number, reason?: string) => 
-  superAdminSubscriptionService.extendTrialForLubricentro(lubricentroId, additionalDays, reason);
-
-export const getLubricentrosNeedingAttention = () => 
-  superAdminSubscriptionService.getLubricentrosNeedingAttention();
-
-export default superAdminSubscriptionService;

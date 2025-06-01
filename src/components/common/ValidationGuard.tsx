@@ -1,332 +1,293 @@
 // src/components/common/ValidationGuard.tsx
-import React from 'react';
-import { useValidation, UseValidationOptions } from '../../hooks/useValidation';
-import { Alert, Button, Spinner } from '../ui';
-import { 
-  ExclamationTriangleIcon,
-  ShieldExclamationIcon,
-  ClockIcon,
-  EnvelopeIcon,
-  ChatBubbleLeftRightIcon
-} from '@heroicons/react/24/outline';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { useAuth, usePermissions } from '../../hooks/useAuth';
+import { validationMiddleware, ValidationResult } from '../../middleware/validationMiddleware';
 
-interface ValidationGuardProps extends UseValidationOptions {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-  showDetails?: boolean;
+interface ValidationGuardProps {
+  children: ReactNode;
+  lubricentroId?: string;
+  requiredRole?: 'superadmin' | 'admin' | 'user';
+  action?: string;
   className?: string;
+  fallback?: ReactNode;
 }
 
-/**
- * Componente que protege el contenido basado en validaciones
- */
-const ValidationGuard: React.FC<ValidationGuardProps> = ({ 
-  children, 
-  fallback,
-  showDetails = true,
-  className = '',
-  ...validationOptions 
-}) => {
-  const { isValidating, canProceed, error, details, suggestedAction, validate } = useValidation(validationOptions);
+interface ValidationStatus {
+  isValid: boolean;
+  loading: boolean;
+  errors: string[];
+  details?: {
+    currentServices?: number;
+    servicesLimit?: number;
+    subscriptionStatus?: string;
+  };
+}
 
-  // Mostrar spinner mientras valida
-  if (isValidating) {
+export const ValidationGuard: React.FC<ValidationGuardProps> = ({
+  children,
+  lubricentroId,
+  requiredRole,
+  action = 'view',
+  className = '',
+  fallback
+}) => {
+  const { user, loading: authLoading } = useAuth();
+  const { canAccessLubricentro, canManageSubscriptions, canCreateService } = usePermissions();
+  const [validationStatus, setValidationStatus] = useState<ValidationStatus>({
+    isValid: false,
+    loading: true,
+    errors: []
+  });
+
+  useEffect(() => {
+    validateAccess();
+  }, [user, lubricentroId, requiredRole, action]);
+
+  const validateAccess = async () => {
+    if (authLoading) return;
+
+    setValidationStatus({ isValid: false, loading: true, errors: [] });
+
+    try {
+      const errors: string[] = [];
+      let validationDetails = {};
+
+      // Validar autenticación
+      if (!user) {
+        errors.push('Usuario no autenticado');
+        setValidationStatus({ 
+          isValid: false, 
+          loading: false, 
+          errors 
+        });
+        return;
+      }
+
+      // Validar estado del usuario
+      if (user.estado !== 'activo') {
+        errors.push('Usuario inactivo. Contacte al administrador.');
+        setValidationStatus({ 
+          isValid: false, 
+          loading: false, 
+          errors 
+        });
+        return;
+      }
+
+      // Validar rol requerido
+      if (requiredRole && user.role !== requiredRole && user.role !== 'superadmin') {
+        errors.push(`Permisos insuficientes. Rol requerido: ${requiredRole}`);
+      }
+
+      // Validar acceso a lubricentro específico
+      if (lubricentroId && !canAccessLubricentro(lubricentroId)) {
+        errors.push('No tiene permisos para acceder a este lubricentro');
+      }
+
+      // Validar acción específica
+      if (action && user.id) {
+        const permissionValidation = await validationMiddleware.validateUserPermissions(
+          user.id,
+          action,
+          lubricentroId
+        );
+        
+        if (!permissionValidation.isValid) {
+          errors.push(...permissionValidation.errors);
+        }
+      }
+
+      // Validar límites de suscripción si es necesario
+      if (lubricentroId && (action === 'create_service' || action === 'create')) {
+        const subscriptionValidation = await validationMiddleware.validateSubscriptionLimits(lubricentroId);
+        
+        if (!subscriptionValidation.isValid) {
+          errors.push(...subscriptionValidation.errors);
+        } else {
+          validationDetails = subscriptionValidation.details || {};
+        }
+      }
+
+      setValidationStatus({
+        isValid: errors.length === 0,
+        loading: false,
+        errors,
+        details: validationDetails
+      });
+
+    } catch (error) {
+      console.error('Error in validation guard:', error);
+      setValidationStatus({
+        isValid: false,
+        loading: false,
+        errors: ['Error de validación interno']
+      });
+    }
+  };
+
+  // Loading state
+  if (authLoading || validationStatus.loading) {
     return (
-      <div className={`flex items-center justify-center py-8 ${className}`}>
-        <div className="text-center">
-          <Spinner size="lg" />
-          <p className="mt-2 text-sm text-gray-600">Verificando permisos...</p>
-        </div>
+      <div className={`flex items-center justify-center p-8 ${className}`}>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Validando permisos...</span>
       </div>
     );
   }
 
-  // Si puede proceder, mostrar el contenido
-  if (canProceed) {
-    return <>{children}</>;
-  }
-
-  // Si hay error, mostrar el fallback o mensaje de error
-  if (error) {
+  // Error state
+  if (!validationStatus.isValid) {
     if (fallback) {
       return <>{fallback}</>;
     }
 
     return (
-      <div className={`${className}`}>
-        <ValidationErrorDisplay
-          error={error}
-          details={details}
-          suggestedAction={suggestedAction}
-          showDetails={showDetails}
-          onRetry={() => validate()}
-        />
+      <div className={`bg-red-50 border border-red-200 rounded-md p-6 ${className}`}>
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <span className="text-red-400 text-xl">⚠</span>
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">
+              Acceso Denegado
+            </h3>
+            <div className="mt-2 text-sm text-red-700">
+              <ul className="list-disc list-inside space-y-1">
+                {validationStatus.errors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </div>
+            
+            {/* Mostrar información de suscripción si es relevante */}
+            {validationStatus.details && (
+              <div className="mt-3 p-3 bg-red-100 rounded-md">
+                <p className="text-sm text-red-800">
+                  <strong>Estado de suscripción:</strong>
+                </p>
+                <ul className="text-xs text-red-700 mt-1">
+                  {validationStatus.details.currentServices !== undefined && (
+                    <li>
+                      Servicios: {validationStatus.details.currentServices} / {' '}
+                      {validationStatus.details.servicesLimit === -1 ? 'Ilimitado' : validationStatus.details.servicesLimit}
+                    </li>
+                  )}
+                  {validationStatus.details.subscriptionStatus && (
+                    <li>Estado: {validationStatus.details.subscriptionStatus}</li>
+                  )}
+                </ul>
+              </div>
+            )}
+            
+            <div className="mt-4">
+              <button
+                onClick={() => window.history.back()}
+                className="text-sm bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+              >
+                Volver
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Estado por defecto (no debería llegar aquí)
-  return null;
-};
-
-/**
- * Componente para mostrar errores de validación
- */
-interface ValidationErrorDisplayProps {
-  error: string;
-  details?: any;
-  suggestedAction?: string;
-  showDetails?: boolean;
-  onRetry: () => void;
-}
-
-const ValidationErrorDisplay: React.FC<ValidationErrorDisplayProps> = ({
-  error,
-  details,
-  suggestedAction,
-  showDetails,
-  onRetry
-}) => {
-  const getIcon = () => {
-    switch (suggestedAction) {
-      case 'contact_support':
-        return <EnvelopeIcon className="h-8 w-8 text-orange-500" />;
-      case 'upgrade_plan':
-        return <ShieldExclamationIcon className="h-8 w-8 text-blue-500" />;
-      case 'extend_trial':
-        return <ClockIcon className="h-8 w-8 text-yellow-500" />;
-      case 'login_required':
-        return <ExclamationTriangleIcon className="h-8 w-8 text-red-500" />;
-      default:
-        return <ExclamationTriangleIcon className="h-8 w-8 text-orange-500" />;
-    }
-  };
-
-  const getAlertType = () => {
-    switch (suggestedAction) {
-      case 'contact_support':
-      case 'extend_trial':
-        return 'warning';
-      case 'upgrade_plan':
-        return 'info';
-      case 'login_required':
-        return 'error';
-      default:
-        return 'warning';
-    }
-  };
-
-  const getSuggestedActionButtons = () => {
-    const buttons = [];
-
-    switch (suggestedAction) {
-      case 'contact_support':
-        buttons.push(
-          <Button
-            key="email"
-            size="sm"
-            color="warning"
-            icon={<EnvelopeIcon className="h-4 w-4" />}
-            onClick={() => window.location.href = 'mailto:soporte@hisma.com.ar?subject=Solicitud%20de%20soporte'}
-          >
-            Contactar por Email
-          </Button>
-        );
-        buttons.push(
-          <Button
-            key="whatsapp"
-            size="sm"
-            variant="outline"
-            color="warning"
-            icon={<ChatBubbleLeftRightIcon className="h-4 w-4" />}
-            onClick={() => window.open('https://wa.me/5491112345678?text=Hola%2C%20necesito%20ayuda%20con%20mi%20suscripción')}
-          >
-            WhatsApp
-          </Button>
-        );
-        break;
-
-      case 'upgrade_plan':
-        buttons.push(
-          <Button
-            key="upgrade"
-            size="sm"
-            color="primary"
-            onClick={() => window.location.href = 'mailto:soporte@hisma.com.ar?subject=Solicitar%20upgrade%20de%20plan'}
-          >
-            Solicitar Upgrade
-          </Button>
-        );
-        break;
-
-      case 'login_required':
-        buttons.push(
-          <Button
-            key="login"
-            size="sm"
-            color="primary"
-            onClick={() => window.location.href = '/login'}
-          >
-            Iniciar Sesión
-          </Button>
-        );
-        break;
-
-      case 'extend_trial':
-        buttons.push(
-          <Button
-            key="extend"
-            size="sm"
-            color="warning"
-            onClick={() => window.location.href = 'mailto:soporte@hisma.com.ar?subject=Solicitar%20extensión%20de%20prueba'}
-          >
-            Solicitar Extensión
-          </Button>
-        );
-        break;
-    }
-
-    // Botón de reintentar siempre disponible
-    buttons.push(
-      <Button
-        key="retry"
-        size="sm"
-        variant="outline"
-        onClick={onRetry}
-      >
-        Reintentar
-      </Button>
-    );
-
-    return buttons;
-  };
-
+  // Success state - mostrar contenido con información adicional si es útil
   return (
-    <div className="max-w-2xl mx-auto py-8">
-      <Alert type={getAlertType()}>
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            {getIcon()}
-          </div>
-          <div className="ml-3 flex-1">
-            <h3 className="text-sm font-medium">
-              Acceso Restringido
-            </h3>
-            <div className="mt-2 text-sm">
-              <p>{error}</p>
-              
-              {/* Mostrar detalles si están disponibles y habilitados */}
-              {showDetails && details && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                  <h4 className="text-xs font-medium text-gray-700 mb-2">Detalles:</h4>
-                  <div className="space-y-1">
-                    {details.planName && (
-                      <div className="text-xs text-gray-600">
-                        <span className="font-medium">Plan actual:</span> {details.planName}
-                      </div>
-                    )}
-                    {details.currentServices !== undefined && details.maxServices !== undefined && (
-                      <div className="text-xs text-gray-600">
-                        <span className="font-medium">Servicios:</span> {details.currentServices} / {details.maxServices}
-                      </div>
-                    )}
-                    {details.currentUsers !== undefined && details.maxUsers !== undefined && (
-                      <div className="text-xs text-gray-600">
-                        <span className="font-medium">Usuarios:</span> {details.currentUsers} / {details.maxUsers}
-                      </div>
-                    )}
-                    {details.daysRemaining !== undefined && (
-                      <div className="text-xs text-gray-600">
-                        <span className="font-medium">Días restantes:</span> {details.daysRemaining}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Botones de acción sugerida */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {getSuggestedActionButtons()}
-            </div>
+    <div className={className}>
+      {validationStatus.details && validationStatus.details.currentServices !== undefined && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+          <div className="text-blue-800 text-sm">
+            <strong>Estado de suscripción:</strong> {' '}
+            Servicios utilizados: {validationStatus.details.currentServices} / {' '}
+            {validationStatus.details.servicesLimit === -1 ? 'Ilimitado' : validationStatus.details.servicesLimit}
           </div>
         </div>
-      </Alert>
+      )}
+      {children}
     </div>
   );
 };
 
+// Componente de HOC para validación más avanzada
+interface withValidationProps {
+  lubricentroId?: string;
+  requiredRole?: 'superadmin' | 'admin' | 'user';
+  action?: string;
+}
+
+export const withValidation = <P extends object>(
+  Component: React.ComponentType<P>,
+  validationProps: withValidationProps
+) => {
+  return (props: P) => (
+    <ValidationGuard {...validationProps}>
+      <Component {...props} />
+    </ValidationGuard>
+  );
+};
+
+// Hook personalizado para usar validación en componentes
+export const useValidation = (lubricentroId?: string, action?: string) => {
+  const { user } = useAuth();
+  const [validationResult, setValidationResult] = useState<ValidationStatus>({
+    isValid: false,
+    loading: true,
+    errors: []
+  });
+
+  useEffect(() => {
+    if (user && lubricentroId) {
+      validateUserAccess();
+    }
+  }, [user, lubricentroId, action]);
+
+  const validateUserAccess = async () => {
+    if (!user || !lubricentroId) return;
+
+    try {
+      setValidationResult(prev => ({ ...prev, loading: true }));
+
+      // Validar permisos del usuario
+      const permissionValidation = await validationMiddleware.validateUserPermissions(
+        user.id,
+        action || 'view',
+        lubricentroId
+      );
+
+      // Validar límites de suscripción si es necesario
+      let subscriptionValidation: ValidationResult = { isValid: true, errors: [], details: {} };
+      if (action === 'create_service' || action === 'create') {
+        subscriptionValidation = await validationMiddleware.validateSubscriptionLimits(lubricentroId);
+      }
+
+      const allErrors = [
+        ...permissionValidation.errors,
+        ...subscriptionValidation.errors
+      ];
+
+      setValidationResult({
+        isValid: allErrors.length === 0,
+        loading: false,
+        errors: allErrors,
+        details: subscriptionValidation.details
+      });
+
+    } catch (error) {
+      console.error('Error in useValidation:', error);
+      setValidationResult({
+        isValid: false,
+        loading: false,
+        errors: ['Error de validación']
+      });
+    }
+  };
+
+  return {
+    ...validationResult,
+    revalidate: validateUserAccess
+  };
+};
+
 export default ValidationGuard;
-
-// ✅ COMPONENTES DE CONVENIENCIA ESPECÍFICOS
-
-/**
- * Protege la creación de servicios
- */
-export const ServiceCreationGuard: React.FC<{
-  children: React.ReactNode;
-  lubricentroId?: string;
-  className?: string;
-}> = ({ children, lubricentroId, className }) => (
-  <ValidationGuard
-    action="create_service"
-    lubricentroId={lubricentroId}
-    className={className}
-  >
-    {children}
-  </ValidationGuard>
-);
-
-/**
- * Protege la creación de usuarios
- */
-export const UserCreationGuard: React.FC<{
-  children: React.ReactNode;
-  lubricentroId?: string;
-  className?: string;
-}> = ({ children, lubricentroId, className }) => (
-  <ValidationGuard
-    action="create_user"
-    lubricentroId={lubricentroId}
-    className={className}
-  >
-    {children}
-  </ValidationGuard>
-);
-
-/**
- * Protege acciones administrativas
- */
-export const AdminActionGuard: React.FC<{
-  children: React.ReactNode;
-  specificAction: string;
-  lubricentroId?: string;
-  className?: string;
-}> = ({ children, specificAction, lubricentroId, className }) => (
-  <ValidationGuard
-    action="admin_action"
-    metadata={{ specificAction }}
-    lubricentroId={lubricentroId}
-    className={className}
-  >
-    {children}
-  </ValidationGuard>
-);
-
-/**
- * Protege acceso a reportes
- */
-export const ReportAccessGuard: React.FC<{
-  children: React.ReactNode;
-  lubricentroId?: string;
-  className?: string;
-}> = ({ children, lubricentroId, className }) => (
-  <ValidationGuard
-    action="view_reports"
-    lubricentroId={lubricentroId}
-    logFailures={false}
-    className={className}
-  >
-    {children}
-  </ValidationGuard>
-);

@@ -1,422 +1,474 @@
 // src/middleware/validationMiddleware.ts
-import { User } from '../types';
 import { 
-  getSubscriptionLimits, 
-  validateServiceCreation as unifiedValidateServiceCreation,
-  validateUserCreation as unifiedValidateUserCreation 
-} from '../services/unifiedSubscriptionService';
+  collection, 
+  doc, 
+  getDoc, 
+  query, 
+  where, 
+  getDocs 
+} from 'firebase/firestore';
+import { db } from '../lib/firebase'; // Usar la ruta correcta
+import { 
+  User, 
+  Lubricentro, 
+  OilChange, 
+  SubscriptionPlanType 
+} from '../types';
 
-// ✅ TIPOS PARA EL MIDDLEWARE
 export interface ValidationResult {
   isValid: boolean;
-  canProceed: boolean;
-  errorType: 'auth' | 'subscription' | 'limits' | 'permissions' | 'system';
-  message: string;
+  errors: string[];
   details?: {
     currentServices?: number;
-    maxServices?: number;
-    currentUsers?: number;
-    maxUsers?: number;
-    daysRemaining?: number;
-    planName?: string;
+    servicesLimit?: number;
+    subscriptionStatus?: string;
   };
-  suggestedAction?: 'contact_support' | 'upgrade_plan' | 'extend_trial' | 'login_required';
 }
 
-export interface ValidationContext {
-  user?: User;
+export interface ServiceValidationData {
+  lubricentroId: string;
+  serviceType?: string;
+  clientName?: string;
+  vehicleDomain?: string;
+}
+
+export interface UserValidationData {
+  email: string;
   lubricentroId?: string;
-  action: 'create_service' | 'create_user' | 'view_reports' | 'manage_users' | 'admin_action';
-  metadata?: Record<string, any>;
+  role?: string;
+  name?: string;
 }
 
-// ✅ CLASE PRINCIPAL DEL MIDDLEWARE
-class ValidationMiddleware {
+export interface SubscriptionValidationData {
+  lubricentroId: string;
+  newPlan?: SubscriptionPlanType;
+  currentPlan?: SubscriptionPlanType;
+  servicesCount?: number;
+}
+
+export class ValidationMiddleware {
+  private readonly MAX_SERVICES_DEFAULT = 100;
+  private readonly TRIAL_DURATION_DAYS = 7;
 
   /**
-   * Validación principal que determina si una acción puede proceder
+   * Valida creación de servicio de cambio de aceite
    */
-  async validateAction(context: ValidationContext): Promise<ValidationResult> {
+  async validateServiceCreation(data: ServiceValidationData): Promise<ValidationResult> {
+    const errors: string[] = [];
+
     try {
-      // 1. Validaciones de autenticación
-      const authValidation = this.validateAuthentication(context);
-      if (!authValidation.isValid) {
-        return authValidation;
+      // Validaciones básicas
+      if (!data.lubricentroId) {
+        errors.push('ID de lubricentro es requerido');
       }
 
-      // 2. Validaciones de rol y permisos
-      const roleValidation = this.validateRolePermissions(context);
-      if (!roleValidation.isValid) {
-        return roleValidation;
+      if (!data.clientName || data.clientName.trim().length < 2) {
+        errors.push('Nombre del cliente debe tener al menos 2 caracteres');
       }
 
-      // 3. Validaciones de suscripción (si aplica)
-      if (this.requiresSubscriptionValidation(context)) {
-        const subscriptionValidation = await this.validateSubscription(context);
+      if (!data.vehicleDomain || !this.isValidDomain(data.vehicleDomain)) {
+        errors.push('Dominio de vehículo debe tener formato válido (ej: ABC123)');
+      }
+
+      // Validar límites de suscripción si hay lubricentroId
+      if (data.lubricentroId && errors.length === 0) {
+        const subscriptionValidation = await this.validateSubscriptionLimits(data.lubricentroId);
+        
         if (!subscriptionValidation.isValid) {
-          return subscriptionValidation;
+          errors.push(...subscriptionValidation.errors);
+          return {
+            isValid: false,
+            errors,
+            details: subscriptionValidation.details
+          };
         }
       }
 
-      // 4. Validaciones específicas por acción
-      const actionValidation = await this.validateSpecificAction(context);
-      if (!actionValidation.isValid) {
-        return actionValidation;
-      }
-
-      // ✅ Todas las validaciones pasaron
       return {
-        isValid: true,
-        canProceed: true,
-        errorType: 'system',
-        message: 'Validación exitosa'
+        isValid: errors.length === 0,
+        errors,
+        details: {
+          currentServices: 0, // Se actualizará con datos reales
+          servicesLimit: this.MAX_SERVICES_DEFAULT
+        }
       };
 
     } catch (error) {
-      console.error('Error en middleware de validación:', error);
+      console.error('Error in service validation:', error);
       return {
         isValid: false,
-        canProceed: false,
-        errorType: 'system',
-        message: 'Error interno del sistema',
-        suggestedAction: 'contact_support'
+        errors: ['Error de validación interno'],
+        details: {}
       };
     }
   }
 
   /**
-   * Validación específica para crear servicios
+   * Valida creación de usuario
    */
-  async validateServiceCreation(lubricentroId: string, user?: User): Promise<ValidationResult> {
-    const context: ValidationContext = {
-      user,
-      lubricentroId,
-      action: 'create_service'
-    };
-
-    return this.validateAction(context);
-  }
-
-  /**
-   * Validación específica para crear usuarios
-   */
-  async validateUserCreation(lubricentroId: string, user?: User): Promise<ValidationResult> {
-    const context: ValidationContext = {
-      user,
-      lubricentroId,
-      action: 'create_user'
-    };
-
-    return this.validateAction(context);
-  }
-
-  /**
-   * Validación específica para acciones administrativas
-   */
-  async validateAdminAction(action: string, user?: User, lubricentroId?: string): Promise<ValidationResult> {
-    const context: ValidationContext = {
-      user,
-      lubricentroId,
-      action: 'admin_action',
-      metadata: { specificAction: action }
-    };
-
-    return this.validateAction(context);
-  }
-
-  // ============ MÉTODOS PRIVADOS ============
-
-  /**
-   * Validar autenticación básica
-   */
-  private validateAuthentication(context: ValidationContext): ValidationResult {
-    if (!context.user) {
-      return {
-        isValid: false,
-        canProceed: false,
-        errorType: 'auth',
-        message: 'Usuario no autenticado',
-        suggestedAction: 'login_required'
-      };
-    }
-
-    if (context.user.estado !== 'activo') {
-      return {
-        isValid: false,
-        canProceed: false,
-        errorType: 'auth',
-        message: 'Cuenta de usuario inactiva',
-        suggestedAction: 'contact_support'
-      };
-    }
-
-    return {
-      isValid: true,
-      canProceed: true,
-      errorType: 'auth',
-      message: 'Autenticación válida'
-    };
-  }
-
-  /**
-   * Validar roles y permisos
-   */
-  private validateRolePermissions(context: ValidationContext): ValidationResult {
-    const { user, action } = context;
-
-    if (!user) {
-      return {
-        isValid: false,
-        canProceed: false,
-        errorType: 'permissions',
-        message: 'Usuario requerido para validación de permisos'
-      };
-    }
-
-    // SuperAdmin puede hacer todo
-    if (user.role === 'superadmin') {
-      return {
-        isValid: true,
-        canProceed: true,
-        errorType: 'permissions',
-        message: 'SuperAdmin: todos los permisos'
-      };
-    }
-
-    // Validaciones específicas por rol
-    switch (action) {
-      case 'create_service':
-      case 'view_reports':
-        // Admin y user pueden crear servicios y ver algunos reportes
-        if (user.role === 'admin' || user.role === 'user') {
-          return this.createSuccessResult('permissions', 'Permisos válidos para la acción');
-        }
-        break;
-
-      case 'create_user':
-      case 'manage_users':
-      case 'admin_action':
-        // Solo admin puede gestionar usuarios
-        if (user.role === 'admin') {
-          return this.createSuccessResult('permissions', 'Permisos de administrador válidos');
-        }
-        return {
-          isValid: false,
-          canProceed: false,
-          errorType: 'permissions',
-          message: 'Se requieren permisos de administrador para esta acción'
-        };
-
-      default:
-        // Acción no reconocida
-        return {
-          isValid: false,
-          canProceed: false,
-          errorType: 'permissions',
-          message: `Acción no reconocida: ${action}`
-        };
-    }
-
-    return {
-      isValid: false,
-      canProceed: false,
-      errorType: 'permissions',
-      message: 'Permisos insuficientes para esta acción'
-    };
-  }
-
-  /**
-   * Validar suscripción y límites
-   */
-  private async validateSubscription(context: ValidationContext): Promise<ValidationResult> {
-    const { lubricentroId, action } = context;
-
-    if (!lubricentroId) {
-      return {
-        isValid: false,
-        canProceed: false,
-        errorType: 'subscription',
-        message: 'ID de lubricentro requerido para validación de suscripción'
-      };
-    }
+  async validateUserCreation(data: UserValidationData): Promise<ValidationResult> {
+    const errors: string[] = [];
 
     try {
-      // Obtener límites actuales
-      const limits = await getSubscriptionLimits(lubricentroId);
-
-      // Validaciones específicas por acción
-      switch (action) {
-        case 'create_service':
-          const serviceValidation = await validateServiceCreation(lubricentroId);
-          
-          if (!serviceValidation.canCreateService) {
-            return {
-              isValid: false,
-              canProceed: false,
-              errorType: 'limits',
-              message: serviceValidation.message || 'No se pueden crear más servicios',
-              details: {
-                currentServices: limits.currentServices,
-                maxServices: limits.maxServices || undefined,
-                planName: limits.planName,
-                daysRemaining: limits.daysRemaining
-              },
-              suggestedAction: limits.planName === 'Período de Prueba' ? 'contact_support' : 'upgrade_plan'
-            };
-          }
-          break;
-
-        case 'create_user':
-          const userValidation = await validateUserCreation(lubricentroId);
-          
-          if (!userValidation.canCreateUser) {
-            return {
-              isValid: false,
-              canProceed: false,
-              errorType: 'limits',
-              message: userValidation.message || 'No se pueden crear más usuarios',
-              details: {
-                currentUsers: limits.currentUsers,
-                maxUsers: limits.maxUsers,
-                planName: limits.planName
-              },
-              suggestedAction: limits.planName === 'Período de Prueba' ? 'contact_support' : 'upgrade_plan'
-            };
-          }
-          break;
+      // Validar email
+      if (!data.email || !this.isValidEmail(data.email)) {
+        errors.push('Email debe tener formato válido');
       }
 
-      // Verificar si el período de prueba ha expirado
-      if (limits.planName === 'Período de Prueba' && limits.daysRemaining === 0) {
-        return {
-          isValid: false,
-          canProceed: false,
-          errorType: 'subscription',
-          message: 'El período de prueba ha expirado',
-          details: {
-            planName: limits.planName,
-            daysRemaining: 0
-          },
-          suggestedAction: 'contact_support'
-        };
+      // Validar nombre
+      if (!data.name || data.name.trim().length < 2) {
+        errors.push('Nombre debe tener al menos 2 caracteres');
       }
 
-      return this.createSuccessResult('subscription', 'Suscripción válida');
+      // Validar lubricentroId para usuarios no admin
+      if (data.role !== 'superadmin' && !data.lubricentroId) {
+        errors.push('Usuario debe estar asociado a un lubricentro');
+      }
+
+      // Validar que el lubricentro existe (si se proporciona)
+      if (data.lubricentroId) {
+        const lubricentroExists = await this.validateLubricentroExists(data.lubricentroId);
+        if (!lubricentroExists.isValid) {
+          errors.push(...lubricentroExists.errors);
+        }
+      }
+
+      // Verificar que el email no esté en uso
+      const emailExists = await this.checkEmailExists(data.email);
+      if (emailExists) {
+        errors.push('El email ya está registrado en el sistema');
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
+      };
 
     } catch (error) {
-      console.error('Error al validar suscripción:', error);
+      console.error('Error in user validation:', error);
       return {
         isValid: false,
-        canProceed: false,
-        errorType: 'system',
-        message: 'Error al verificar la suscripción',
-        suggestedAction: 'contact_support'
+        errors: ['Error de validación interno']
       };
     }
   }
 
   /**
-   * Validaciones específicas por acción
+   * Valida límites de suscripción para un lubricentro
    */
-  private async validateSpecificAction(context: ValidationContext): Promise<ValidationResult> {
-    const { action, user, lubricentroId } = context;
+  async validateSubscriptionLimits(lubricentroId: string): Promise<ValidationResult> {
+    const errors: string[] = [];
 
-    switch (action) {
-      case 'create_service':
-        // Validaciones adicionales para crear servicios
-        if (!lubricentroId) {
-          return this.createErrorResult('system', 'ID de lubricentro requerido para crear servicios');
-        }
-        break;
+    try {
+      // Obtener datos del lubricentro desde Firebase
+      const lubricentro = await this.getLubricentroData(lubricentroId);
+      
+      if (!lubricentro) {
+        errors.push('Lubricentro no encontrado');
+        return { isValid: false, errors };
+      }
 
-      case 'create_user':
-        // Validaciones adicionales para crear usuarios
-        if (!lubricentroId) {
-          return this.createErrorResult('system', 'ID de lubricentro requerido para crear usuarios');
-        }
-        
-        if (user?.role !== 'admin' && user?.role !== 'superadmin') {
-          return this.createErrorResult('permissions', 'Solo administradores pueden crear usuarios');
-        }
-        break;
+      // Verificar estado de suscripción - usar campo correcto del tipo real
+      if (lubricentro.estado === 'inactivo') {
+        errors.push('Lubricentro inactivo. Contacte al administrador.');
+        return { 
+          isValid: false, 
+          errors,
+          details: {
+            subscriptionStatus: lubricentro.estado
+          }
+        };
+      }
 
-      case 'admin_action':
-        // Validaciones para acciones administrativas
-        const specificAction = context.metadata?.specificAction;
-        
-        if (specificAction === 'delete_data' && user?.role !== 'superadmin') {
-          return this.createErrorResult('permissions', 'Solo SuperAdmin puede eliminar datos');
+      // Verificar si está en período de prueba vencido
+      if (lubricentro.estado === 'trial') {
+        const trialEnd = lubricentro.trialEndDate || new Date();
+        if (trialEnd < new Date()) {
+          errors.push('Período de prueba vencido. Active su suscripción.');
+          return { 
+            isValid: false, 
+            errors,
+            details: {
+              subscriptionStatus: 'trial_expired'
+            }
+          };
         }
-        break;
+      }
+
+      // Verificar límite de servicios usando los campos reales del proyecto
+      const currentServices = lubricentro.servicesUsedThisMonth || 0;
+      const servicesLimit = this.getServicesLimitForPlan(lubricentro.subscriptionPlan || 'basic');
+      
+      if (servicesLimit > 0 && currentServices >= servicesLimit) {
+        errors.push(`Límite de servicios alcanzado (${currentServices}/${servicesLimit}). Actualice su plan.`);
+        return { 
+          isValid: false, 
+          errors,
+          details: {
+            currentServices,
+            servicesLimit,
+            subscriptionStatus: lubricentro.estado
+          }
+        };
+      }
+
+      return {
+        isValid: true,
+        errors: [],
+        details: {
+          currentServices,
+          servicesLimit,
+          subscriptionStatus: lubricentro.estado
+        }
+      };
+
+    } catch (error) {
+      console.error('Error validating subscription limits:', error);
+      return {
+        isValid: false,
+        errors: ['Error al validar límites de suscripción']
+      };
     }
-
-    return this.createSuccessResult('system', 'Validación específica exitosa');
   }
 
   /**
-   * Determinar si se requiere validación de suscripción
+   * Valida cambio de plan de suscripción
    */
-  private requiresSubscriptionValidation(context: ValidationContext): boolean {
-    const { action, user } = context;
+  async validateSubscriptionChange(data: SubscriptionValidationData): Promise<ValidationResult> {
+    const errors: string[] = [];
 
-    // SuperAdmin no necesita validación de suscripción
-    if (user?.role === 'superadmin') {
-      return false;
+    try {
+      if (!data.lubricentroId) {
+        errors.push('ID de lubricentro es requerido');
+      }
+
+      if (!data.newPlan) {
+        errors.push('Nuevo plan es requerido');
+      }
+
+      // Validar que el nuevo plan es diferente al actual
+      if (data.newPlan === data.currentPlan) {
+        errors.push('El nuevo plan debe ser diferente al plan actual');
+      }
+
+      // Validar downgrade con servicios excedidos
+      if (data.newPlan && data.currentPlan && data.servicesCount) {
+        const newLimit = this.getServicesLimitForPlan(data.newPlan);
+        if (newLimit > 0 && data.servicesCount > newLimit) {
+          errors.push(`No se puede cambiar al plan ${data.newPlan}. Servicios actuales (${data.servicesCount}) exceden el límite del nuevo plan (${newLimit})`);
+        }
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
+      };
+
+    } catch (error) {
+      console.error('Error validating subscription change:', error);
+      return {
+        isValid: false,
+        errors: ['Error al validar cambio de suscripción']
+      };
     }
-
-    // Acciones que requieren validación de suscripción
-    const actionsRequiringSubscription = [
-      'create_service',
-      'create_user'
-    ];
-
-    return actionsRequiringSubscription.includes(action);
   }
 
   /**
-   * Helper para crear resultado de éxito
+   * Valida datos de lubricentro
    */
-  private createSuccessResult(errorType: ValidationResult['errorType'], message: string): ValidationResult {
-    return {
-      isValid: true,
-      canProceed: true,
-      errorType,
-      message
-    };
+  async validateLubricentroData(lubricentro: Partial<Lubricentro>): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    try {
+      // Validaciones requeridas
+      if (!lubricentro.fantasyName || lubricentro.fantasyName.trim().length < 2) {
+        errors.push('Nombre de fantasía debe tener al menos 2 caracteres');
+      }
+
+      if (!lubricentro.responsable || lubricentro.responsable.trim().length < 2) {
+        errors.push('Nombre del responsable debe tener al menos 2 caracteres');
+      }
+
+      if (!lubricentro.cuit || !this.isValidCUIT(lubricentro.cuit)) {
+        errors.push('CUIT debe tener formato válido (XX-XXXXXXXX-X)');
+      }
+
+      if (!lubricentro.email || !this.isValidEmail(lubricentro.email)) {
+        errors.push('Email debe tener formato válido');
+      }
+
+      if (!lubricentro.phone || lubricentro.phone.trim().length < 8) {
+        errors.push('Teléfono debe tener al menos 8 dígitos');
+      }
+
+      if (!lubricentro.domicilio || lubricentro.domicilio.trim().length < 5) {
+        errors.push('Domicilio debe tener al menos 5 caracteres');
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
+      };
+
+    } catch (error) {
+      console.error('Error validating lubricentro data:', error);
+      return {
+        isValid: false,
+        errors: ['Error al validar datos del lubricentro']
+      };
+    }
   }
 
   /**
-   * Helper para crear resultado de error
+   * Valida permisos de usuario
    */
-  private createErrorResult(
-    errorType: ValidationResult['errorType'], 
-    message: string, 
-    suggestedAction?: ValidationResult['suggestedAction']
-  ): ValidationResult {
-    return {
-      isValid: false,
-      canProceed: false,
-      errorType,
-      message,
-      suggestedAction
+  async validateUserPermissions(
+    userId: string, 
+    action: string, 
+    resourceId?: string
+  ): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    try {
+      // Obtener datos del usuario desde Firebase
+      const user = await this.getUserData(userId);
+      
+      if (!user) {
+        errors.push('Usuario no encontrado');
+        return { isValid: false, errors };
+      }
+
+      // Validar permisos según rol
+      if (user.role === 'superadmin') {
+        // SuperAdmin tiene todos los permisos
+        return { isValid: true, errors: [] };
+      }
+
+      if (user.role === 'admin' && resourceId) {
+        // Admin solo puede acceder a recursos de su lubricentro
+        if (user.lubricentroId !== resourceId) {
+          errors.push('No tiene permisos para acceder a este recurso');
+        }
+      }
+
+      if (user.role === 'user') {
+        // Usuario regular tiene permisos limitados
+        const allowedActions = ['view_services', 'create_service', 'edit_own_service'];
+        if (!allowedActions.includes(action)) {
+          errors.push('No tiene permisos para realizar esta acción');
+        }
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
+      };
+
+    } catch (error) {
+      console.error('Error validating user permissions:', error);
+      return {
+        isValid: false,
+        errors: ['Error al validar permisos']
+      };
+    }
+  }
+
+  // Métodos auxiliares privados
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  private isValidDomain(domain: string): boolean {
+    // Formato argentino: ABC123 o AB123CD
+    const domainRegex = /^[A-Z]{2,3}\d{3}[A-Z]{0,2}$/i;
+    return domainRegex.test(domain.replace(/\s/g, ''));
+  }
+
+  private isValidCUIT(cuit: string): boolean {
+    // Formato: XX-XXXXXXXX-X
+    const cuitRegex = /^\d{2}-\d{8}-\d{1}$/;
+    return cuitRegex.test(cuit);
+  }
+
+  private getServicesLimitForPlan(plan: SubscriptionPlanType): number {
+    const limits = {
+      basic: 100,
+      premium: 500,
+      enterprise: -1, // Sin límite
+      starter: 50 // Agregado para manejar el plan starter
     };
+    return limits[plan] || 100;
+  }
+
+  private async getLubricentroData(lubricentroId: string): Promise<Lubricentro | null> {
+    try {
+      const docRef = doc(db, 'lubricentros', lubricentroId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Lubricentro;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting lubricentro data:', error);
+      return null;
+    }
+  }
+
+  private async validateLubricentroExists(lubricentroId: string): Promise<ValidationResult> {
+    try {
+      const lubricentro = await this.getLubricentroData(lubricentroId);
+      
+      if (!lubricentro) {
+        return {
+          isValid: false,
+          errors: ['Lubricentro no encontrado']
+        };
+      }
+
+      return {
+        isValid: true,
+        errors: []
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        errors: ['Error al verificar lubricentro']
+      };
+    }
+  }
+
+  private async getUserData(userId: string): Promise<User | null> {
+    try {
+      const docRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as User;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      return null;
+    }
+  }
+
+  private async checkEmailExists(email: string): Promise<boolean> {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+      
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking email existence:', error);
+      return false; // En caso de error, permitir continuar
+    }
   }
 }
 
-// ✅ EXPORTAR INSTANCIA SINGLETON
+// Instancia singleton para uso en toda la aplicación
 export const validationMiddleware = new ValidationMiddleware();
-
-// ✅ FUNCIONES DE CONVENIENCIA
-export const validateServiceCreationAction = (lubricentroId: string, user?: User) =>
-  validationMiddleware.validateServiceCreation(lubricentroId, user);
-
-export const validateUserCreationAction = (lubricentroId: string, user?: User) =>
-  validationMiddleware.validateUserCreation(lubricentroId, user);
-
-export const validateAdminAction = (action: string, user?: User, lubricentroId?: string) =>
-  validationMiddleware.validateAdminAction(action, user, lubricentroId);
-
-export const validateAction = (context: ValidationContext) =>
-  validationMiddleware.validateAction(context);
-
-export default validationMiddleware;

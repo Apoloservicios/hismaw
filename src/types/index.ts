@@ -108,7 +108,7 @@ export interface OilChange {
   nroCambio: string;
   nombreCliente: string;
   celular?: string;
-  telefonoCliente?: string;
+
   lubricentroNombre?: string;
   
   // Datos del vehículo

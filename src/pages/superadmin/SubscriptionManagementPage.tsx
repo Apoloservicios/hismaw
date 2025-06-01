@@ -584,7 +584,7 @@ const SubscriptionManagementPage: React.FC = () => {
                           
                           {subscription.estado === 'inactivo' && (
                             <Button
-                              size="xs"
+                              size="sm"
                               color="success"
                               onClick={() => handleActivateSubscription(subscription.lubricentroId, 'basic')}
                               disabled={processingAction === `activate-${subscription.lubricentroId}`}
